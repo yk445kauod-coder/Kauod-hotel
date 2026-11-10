@@ -66,7 +66,7 @@ export function PrintView({ invoiceId, onClose }: { invoiceId: string; onClose: 
 
   return (
     <div>
-      <div className="no-print content" style={{ maxWidth: 900 }}>
+      <div className="no-print content print-toolbar" style={{ maxWidth: 900 }}>
         <div className="row" style={{ justifyContent: 'space-between' }}>
           <button className="btn" onClick={onClose}>← رجوع</button>
           <div className="row">

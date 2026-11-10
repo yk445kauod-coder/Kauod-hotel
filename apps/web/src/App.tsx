@@ -107,7 +107,7 @@ export function App() {
 
       <main className="main">
         <header className="topbar no-print">
-          <div className="row" style={{ gap: 8, minWidth: 0 }}>
+          <div className="row" style={{ gap: 8, minWidth: 0, flex: 1, flexWrap: 'nowrap' }}>
             <button
               className="btn ghost nav-toggle"
               onClick={() => setNavOpen((v) => !v)}
@@ -117,7 +117,7 @@ export function App() {
             >
               ☰
             </button>
-            <h2 style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <h2 style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
               {nav.find((n) => n.id === tab)?.label}
             </h2>
           </div>

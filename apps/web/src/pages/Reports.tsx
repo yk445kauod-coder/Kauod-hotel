@@ -67,12 +67,12 @@ export function ReportsPage() {
 
       <div className="card">
         <h3>الإيرادات {group === 'day' ? 'اليومية' : 'الشهرية'}</h3>
-        <table>
+        <table data-mobile="cards">
           <thead><tr><th>الفترة</th><th className="num">عدد الفواتير</th><th className="num">الإجمالي</th><th className="num">الضريبة</th></tr></thead>
           <tbody>
             {rows.length === 0 && <tr><td colSpan={4} className="muted">لا بيانات في هذه الفترة</td></tr>}
             {rows.map((r) => (
-              <tr key={r.bucket}><td className="mono">{r.bucket}</td><td className="num">{r.invoices}</td><td className="num">{egp(r.total)}</td><td className="num">{egp(r.tax)}</td></tr>
+              <tr key={r.bucket}><td className="mono" data-label="الفترة">{r.bucket}</td><td className="num" data-label="عدد الفواتير">{r.invoices}</td><td className="num" data-label="الإجمالي">{egp(r.total)}</td><td className="num" data-label="الضريبة">{egp(r.tax)}</td></tr>
             ))}
           </tbody>
         </table>

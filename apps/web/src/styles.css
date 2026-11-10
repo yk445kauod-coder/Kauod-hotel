@@ -193,7 +193,8 @@ a { color: var(--brand); }
 .grid.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .grid.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 @media (max-width: 960px) {
-  .grid.cols-2, .grid.cols-3, .grid.cols-4 { grid-template-columns: 1fr; }
+  .grid.cols-2 { grid-template-columns: 1fr; }
+  .grid.cols-3, .grid.cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .content { padding: 16px; }
 }
 
@@ -230,6 +231,8 @@ a { color: var(--brand); }
   .row.end { justify-content: stretch; }
   .row.end > .btn { flex: 1; }
   .totals { max-width: none; }
+  .grid.cols-3, .grid.cols-4 { grid-template-columns: 1fr; }
+  .stat .v { font-size: 20px; }
 }
 
 /* Touch targets + iOS niceties (only on coarse pointers, so desktop is unaffected). */
@@ -247,6 +250,26 @@ a { color: var(--brand); }
 /* Table wrapper: horizontal scroll on small screens instead of clipped columns. */
 .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .table-wrap > table { min-width: 100%; }
+
+/* Invoice preview (Print view) on phones: usable toolbar + stacked header/totals.
+   Scoped to `screen` so printing keeps the A4 layout untouched. */
+@media (max-width: 960px) {
+  .print-toolbar .btn { min-height: 44px; }
+}
+@media screen and (max-width: 700px) {
+  .print-toolbar > .row { flex-wrap: wrap; gap: 8px; }
+  .print-toolbar .alert { flex: 1 1 100%; order: 3; margin: 0; }
+  .print-area { padding: 10px 0; }
+  .inv { border-radius: 8px; }
+  .inv-hd { grid-template-columns: 1fr; gap: 12px; text-align: center; padding: 16px; }
+  .inv-hd-seller, .inv-hd-meta { text-align: center; }
+  .inv-lower { grid-template-columns: 1fr; padding: 14px 16px; }
+  .inv-signs { grid-template-columns: 1fr; gap: 22px; padding: 22px 16px 10px; }
+  .inv-guest, .inv-ft { padding-inline: 16px; }
+  .inv-ft { flex-direction: column; text-align: center; }
+  .inv-table { width: calc(100% - 32px); margin-inline: 16px; }
+  .inv-cancel-watermark { font-size: 54px; }
+}
 
 /* Card layout for data tables on phones (opt-in via data-mobile="cards").
    Each <td> carries data-label so it becomes a labelled key/value row. */
