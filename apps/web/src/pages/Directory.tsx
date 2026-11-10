@@ -66,13 +66,13 @@ export function DirectoryPage({ user }: { user: SessionUser }) {
 
       <div className="card">
         <h3>الغرف ({rooms.length})</h3>
-        <table>
+        <table data-mobile="cards">
           <thead><tr><th>الرقم</th><th>النوع</th><th className="num">سعر الليلة</th><th className="num">السعة</th><th>الحالة</th></tr></thead>
           <tbody>
             {rooms.length === 0 && <tr><td colSpan={5} className="muted">لا توجد غرف</td></tr>}
             {rooms.map((r) => (
-              <tr key={r.id}><td className="mono">{r.number}</td><td>{r.type}</td><td className="num">{egp(r.nightly_rate)}</td><td className="num">{r.capacity}</td>
-                <td>{r.active ? <span className="badge locked">مفعّلة</span> : <span className="badge cancelled">معطّلة</span>}</td></tr>
+              <tr key={r.id}><td className="mono" data-label="الرقم">{r.number}</td><td data-label="النوع">{r.type}</td><td className="num" data-label="سعر الليلة">{egp(r.nightly_rate)}</td><td className="num" data-label="السعة">{r.capacity}</td>
+                <td data-label="الحالة">{r.active ? <span className="badge locked">مفعّلة</span> : <span className="badge cancelled">معطّلة</span>}</td></tr>
             ))}
           </tbody>
         </table>
@@ -102,16 +102,16 @@ export function DirectoryPage({ user }: { user: SessionUser }) {
 
       <div className="card">
         <h3>الحجوزات</h3>
-        <table>
+        <table data-mobile="cards">
           <thead><tr><th>النزيل</th><th>الغرفة</th><th>الدخول</th><th>الخروج</th><th className="num">السعر</th><th>الحالة</th><th></th></tr></thead>
           <tbody>
             {res.length === 0 && <tr><td colSpan={7} className="muted">لا حجوزات</td></tr>}
             {res.map((r) => (
               <tr key={r.id}>
-                <td>{r.guest_name}</td><td className="mono">{r.room_number || '—'}</td><td>{d(r.check_in)}</td><td>{d(r.check_out)}</td>
-                <td className="num">{egp(r.nightly_rate)}</td>
-                <td><span className="badge open">{RES_STATUS[r.status] ?? r.status}</span></td>
-                <td>{canWrite && (
+                <td data-label="النزيل">{r.guest_name}</td><td className="mono" data-label="الغرفة">{r.room_number || '—'}</td><td data-label="الدخول">{d(r.check_in)}</td><td data-label="الخروج">{d(r.check_out)}</td>
+                <td className="num" data-label="السعر">{egp(r.nightly_rate)}</td>
+                <td data-label="الحالة"><span className="badge open">{RES_STATUS[r.status] ?? r.status}</span></td>
+                <td data-label="">{canWrite && (
                   <select value={r.status} onChange={(e) => setResStatus(r.id, e.target.value)} style={{ padding: 5, border: '1px solid var(--border)', borderRadius: 6 }}>
                     {Object.entries(RES_STATUS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                   </select>
@@ -124,11 +124,11 @@ export function DirectoryPage({ user }: { user: SessionUser }) {
 
       <div className="card">
         <h3>سجل النزلاء ({guests.length})</h3>
-        <table>
+        <table data-mobile="cards">
           <thead><tr><th>الاسم</th><th>الهاتف</th><th>البريد</th><th>الرقم الضريبي</th></tr></thead>
           <tbody>
             {guests.length === 0 && <tr><td colSpan={4} className="muted">لا نزلاء مسجّلون</td></tr>}
-            {guests.map((g) => <tr key={g.id}><td>{g.name}</td><td className="mono">{g.phone || '—'}</td><td className="mono">{g.email || '—'}</td><td className="mono">{g.tax_id || '—'}</td></tr>)}
+            {guests.map((g) => <tr key={g.id}><td data-label="الاسم">{g.name}</td><td className="mono" data-label="الهاتف">{g.phone || '—'}</td><td className="mono" data-label="البريد">{g.email || '—'}</td><td className="mono" data-label="الرقم الضريبي">{g.tax_id || '—'}</td></tr>)}
           </tbody>
         </table>
       </div>

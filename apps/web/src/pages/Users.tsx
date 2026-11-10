@@ -64,17 +64,17 @@ export function UsersPage({ user }: { user: SessionUser }) {
 
       <div className="card">
         <h3>المستخدمون</h3>
-        <table>
+        <table data-mobile="cards">
           <thead><tr><th>اسم المستخدم</th><th>الاسم</th><th>الدور</th><th>الحالة</th><th>آخر دخول</th><th></th></tr></thead>
           <tbody>
             {rows.map((u) => (
               <tr key={u.id}>
-                <td className="mono">{u.username}{u.is_owner ? ' ★' : ''}</td>
-                <td>{u.name}</td>
-                <td>{ROLE_LABEL[u.role] ?? u.role}</td>
-                <td>{u.active ? <span className="badge locked">نشط</span> : <span className="badge cancelled">معطّل</span>}</td>
-                <td>{u.last_login_at ? dt(u.last_login_at) : '—'}</td>
-                <td>{isAdmin && !u.is_owner && (
+                <td className="mono" data-label="اسم المستخدم">{u.username}{u.is_owner ? ' ★' : ''}</td>
+                <td data-label="الاسم">{u.name}</td>
+                <td data-label="الدور">{ROLE_LABEL[u.role] ?? u.role}</td>
+                <td data-label="الحالة">{u.active ? <span className="badge locked">نشط</span> : <span className="badge cancelled">معطّل</span>}</td>
+                <td data-label="آخر دخول">{u.last_login_at ? dt(u.last_login_at) : '—'}</td>
+                <td data-label="">{isAdmin && !u.is_owner && (
                   <div className="row" style={{ gap: 6 }}>
                     <button className="btn ghost" onClick={() => toggleActive(u)}>{u.active ? 'تعطيل' : 'تفعيل'}</button>
                     <button className="btn ghost" onClick={() => resetPassword(u)}>كلمة المرور</button>

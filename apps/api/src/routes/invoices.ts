@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import {
   InvoiceInputSchema, PaymentSchema, calcInvoice, buildEtaDocument, etaQrPayload,
-  etaDateTime, validateEtaDocument,
+  etaDateTime, validateEtaDocument, tafqeet,
 } from '@kaoud/core';
 import type { Env } from '../db.js';
 import { requireAuth, requireRole } from '../auth-middleware.js';
@@ -204,6 +204,7 @@ invoiceRoutes.get('/api/invoices/:id/print', requireAuth(), async (c) => {
   });
   return c.json({
     invoice: inv, lines, calc, settings, paid, qr,
+    totalInWords: tafqeet(calc.total),
     issuer: { name: issuerName, taxId: issuerTaxId, address: issuerAddress, city: settings.city },
     etaIssues: validateEtaDocument(etaDoc).map((i) => `${i.path}: ${i.message}`),
     etaConfigured: etaConfigured(c.env),

@@ -63,11 +63,11 @@ export function SerialPage({ user }: { user: SessionUser }) {
         {problems.length === 0
           ? <div className="muted">لا توجد أرقام ناقصة أو مكررة.</div>
           : (
-            <table>
+            <table data-mobile="cards">
               <thead><tr><th>الرقم</th><th>الحالة</th></tr></thead>
               <tbody>
                 {problems.map((p) => (
-                  <tr key={p.serial}><td className="mono">{p.serial}</td><td><span className={`badge ${STATE_BADGE[p.state]}`}>{STATE_LABEL[p.state]}</span></td></tr>
+                  <tr key={p.serial}><td className="mono" data-label="الرقم">{p.serial}</td><td data-label="الحالة"><span className={`badge ${STATE_BADGE[p.state]}`}>{STATE_LABEL[p.state]}</span></td></tr>
                 ))}
               </tbody>
             </table>

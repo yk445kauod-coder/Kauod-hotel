@@ -39,18 +39,18 @@ export function EtaPage() {
 
       <div className="card">
         <h3>قائمة الإرسال ({data?.queue.length ?? 0})</h3>
-        <table>
+        <table data-mobile="cards">
           <thead><tr><th>رقم الفاتورة</th><th>الحالة</th><th>المحاولات</th><th>آخر خطأ</th><th>التاريخ</th><th></th></tr></thead>
           <tbody>
             {(!data || data.queue.length === 0) && <tr><td colSpan={6} className="muted">لا توجد فواتير في القائمة</td></tr>}
             {data?.queue.map((q) => (
               <tr key={q.id}>
-                <td className="mono">{q.serial}</td>
-                <td><span className="badge eta">{ETA_LABEL[q.status] ?? q.status}</span></td>
-                <td className="num">{q.attempts}</td>
-                <td className="muted">{q.last_error ?? '—'}</td>
-                <td>{dt(q.created_at)}</td>
-                <td><button className="btn ghost" onClick={() => download(q.invoice_id, q.serial)}>تنزيل JSON</button></td>
+                <td className="mono" data-label="رقم الفاتورة">{q.serial}</td>
+                <td data-label="الحالة"><span className="badge eta">{ETA_LABEL[q.status] ?? q.status}</span></td>
+                <td className="num" data-label="المحاولات">{q.attempts}</td>
+                <td className="muted" data-label="آخر خطأ">{q.last_error ?? '—'}</td>
+                <td data-label="التاريخ">{dt(q.created_at)}</td>
+                <td data-label=""><button className="btn ghost" onClick={() => download(q.invoice_id, q.serial)}>تنزيل JSON</button></td>
               </tr>
             ))}
           </tbody>

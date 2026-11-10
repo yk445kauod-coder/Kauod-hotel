@@ -28,18 +28,18 @@ export function AuditPage() {
     <div className="card">
       <h3>سجل النشاط</h3>
       {err && <div className="alert err">{err}</div>}
-      <table>
+      <table data-mobile="cards">
         <thead><tr><th>التاريخ</th><th>الإجراء</th><th>الكيان</th><th>المعرّف</th><th>IP</th><th>التفاصيل</th></tr></thead>
         <tbody>
           {rows.length === 0 && <tr><td colSpan={6} className="muted">لا سجلات</td></tr>}
           {rows.map((r) => (
             <tr key={r.id}>
-              <td>{dt(r.created_at)}</td>
-              <td>{ACTION_LABEL[r.action] ?? r.action}</td>
-              <td className="mono">{r.entity}</td>
-              <td className="mono">{r.entity_id?.slice(0, 16) ?? '—'}</td>
-              <td className="mono">{r.ip ?? '—'}</td>
-              <td className="muted" style={{ maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.detail || '—'}</td>
+              <td data-label="التاريخ">{dt(r.created_at)}</td>
+              <td data-label="الإجراء">{ACTION_LABEL[r.action] ?? r.action}</td>
+              <td className="mono" data-label="الكيان">{r.entity}</td>
+              <td className="mono" data-label="المعرّف">{r.entity_id?.slice(0, 16) ?? '—'}</td>
+              <td className="mono" data-label="IP">{r.ip ?? '—'}</td>
+              <td className="muted" data-label="التفاصيل" style={{ maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.detail || '—'}</td>
             </tr>
           ))}
         </tbody>

@@ -191,9 +191,11 @@ describe('API integration', () => {
 
     const print = await req(`/api/invoices/${invoice.id}/print`, {}, ctx);
     expect(print.status).toBe(200);
-    const printBody = await print.json() as { etaIssues: string[]; qr: string };
+    const printBody = await print.json() as { etaIssues: string[]; qr: string; totalInWords: string; calc: { total: string } };
     expect(printBody.etaIssues).toEqual([]);
     expect(printBody.qr.length).toBeGreaterThan(10);
+    expect(printBody.totalInWords).toMatch(/^فقط .+ لا غير$/);
+    expect(printBody.totalInWords).toContain('جنيه مصري');
   });
 
   it('allocates sequential serials and blocks lowering below max', async () => {

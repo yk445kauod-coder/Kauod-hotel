@@ -43,7 +43,7 @@ export function Dashboard({ user, onOpenInvoice }: { user: SessionUser; onOpenIn
 
       <div className="card">
         <div className="spread"><h3>أحدث الفواتير</h3><span className="muted">مرحبًا {user.name}</span></div>
-        <table>
+        <table data-mobile="cards">
           <thead>
             <tr><th>رقم</th><th>النزيل</th><th>الغرفة</th><th>التاريخ</th><th className="num">الإجمالي</th><th>الحالة</th><th></th></tr>
           </thead>
@@ -51,13 +51,13 @@ export function Dashboard({ user, onOpenInvoice }: { user: SessionUser; onOpenIn
             {recent.length === 0 && <tr><td colSpan={7} className="muted">لا توجد فواتير بعد</td></tr>}
             {recent.map((inv) => (
               <tr key={inv.id}>
-                <td className="mono">{inv.serial}</td>
-                <td>{inv.guest_name}</td>
-                <td className="mono">{inv.room_number || '—'}</td>
-                <td>{d(inv.issued_at)}</td>
-                <td className="num">{egp(inv.total)}</td>
-                <td><span className={`badge ${inv.status}`}>{STATUS_LABEL[inv.status]}</span></td>
-                <td><button className="btn ghost" onClick={() => onOpenInvoice(inv.id)}>عرض</button></td>
+                <td className="mono" data-label="رقم">{inv.serial}</td>
+                <td data-label="النزيل">{inv.guest_name}</td>
+                <td className="mono" data-label="الغرفة">{inv.room_number || '—'}</td>
+                <td data-label="التاريخ">{d(inv.issued_at)}</td>
+                <td className="num" data-label="الإجمالي">{egp(inv.total)}</td>
+                <td data-label="الحالة"><span className={`badge ${inv.status}`}>{STATUS_LABEL[inv.status]}</span></td>
+                <td data-label=""><button className="btn ghost" onClick={() => onOpenInvoice(inv.id)}>عرض</button></td>
               </tr>
             ))}
           </tbody>

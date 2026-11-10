@@ -52,7 +52,7 @@ export function Invoices({ user, settings, onPrint }: { user: SessionUser; setti
       {err && <div className="alert err">{err}</div>}
 
       <div className="card">
-        <table>
+        <table data-mobile="cards">
           <thead>
             <tr>
               <th>رقم</th><th>النزيل</th><th>الغرفة</th><th>الدخول</th><th>الخروج</th>
@@ -64,17 +64,17 @@ export function Invoices({ user, settings, onPrint }: { user: SessionUser; setti
             {list.length === 0 && <tr><td colSpan={11} className="muted">لا نتائج</td></tr>}
             {list.map((inv) => (
               <tr key={inv.id}>
-                <td className="mono">{inv.serial}</td>
-                <td>{inv.guest_name}</td>
-                <td className="mono">{inv.room_number || '—'}</td>
-                <td>{d(inv.check_in)}</td>
-                <td>{d(inv.check_out)}</td>
-                <td className="num">{egp(inv.subtotal_net)}</td>
-                <td className="num">{egp(inv.tax_total)}</td>
-                <td className="num"><strong>{egp(inv.total)}</strong></td>
-                <td><span className={`badge ${inv.status}`}>{STATUS_LABEL[inv.status]}</span></td>
-                <td><span className="badge eta">{ETA_LABEL[inv.eta_status] ?? inv.eta_status}</span></td>
-                <td>
+                <td className="mono" data-label="رقم">{inv.serial}</td>
+                <td data-label="النزيل">{inv.guest_name}</td>
+                <td className="mono" data-label="الغرفة">{inv.room_number || '—'}</td>
+                <td data-label="الدخول">{d(inv.check_in)}</td>
+                <td data-label="الخروج">{d(inv.check_out)}</td>
+                <td className="num" data-label="صافي">{egp(inv.subtotal_net)}</td>
+                <td className="num" data-label="ضريبة">{egp(inv.tax_total)}</td>
+                <td className="num" data-label="الإجمالي"><strong>{egp(inv.total)}</strong></td>
+                <td data-label="الحالة"><span className={`badge ${inv.status}`}>{STATUS_LABEL[inv.status]}</span></td>
+                <td data-label="الضرائب"><span className="badge eta">{ETA_LABEL[inv.eta_status] ?? inv.eta_status}</span></td>
+                <td data-label="">
                   <div className="row" style={{ gap: 6 }}>
                     {inv.status !== 'cancelled' && <button className="btn ghost" onClick={() => onPrint(inv.id)}>طباعة</button>}
                     {canWrite && inv.status === 'open' && <button className="btn ghost" onClick={() => openEdit(inv.id, setEditing)}>تعديل</button>}

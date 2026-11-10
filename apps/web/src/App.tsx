@@ -35,6 +35,7 @@ export function App() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>('dashboard');
   const [printId, setPrintId] = useState<string | null>(null);
+  const [navOpen, setNavOpen] = useState(false);
   const [error, setError] = useState('');
   const { theme, toggle: toggleTheme } = useTheme();
 
@@ -55,6 +56,15 @@ export function App() {
     })();
   }, [loadSettings]);
 
+  // Close the mobile drawer with Escape and lock body scroll while it's open.
+  useEffect(() => {
+    if (!navOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setNavOpen(false); };
+    document.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
+    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = ''; };
+  }, [navOpen]);
+
   const onLogin = async (u: SessionUser) => { setUser(u); await loadSettings(); setTab('dashboard'); };
   const onLogout = async () => {
     try { await api.post('/api/auth/logout'); } catch { /* ignore */ }
@@ -73,7 +83,8 @@ export function App() {
 
   return (
     <div className="app">
-      <aside className="sidebar no-print">
+      <div className={`nav-scrim no-print ${navOpen ? 'open' : ''}`} onClick={() => setNavOpen(false)} aria-hidden="true" />
+      <aside className={`sidebar no-print ${navOpen ? 'open' : ''}`}>
         <h1>
           {settings?.logo_data
             ? <img className="logo" src={settings.logo_data} alt={hotelName} />
@@ -82,7 +93,7 @@ export function App() {
         </h1>
         <div className="hotel">نظام الفواتير والضرائب</div>
         {nav.map((n) => (
-          <button key={n.id} className={`navbtn ${tab === n.id ? 'active' : ''}`} onClick={() => setTab(n.id)}>
+          <button key={n.id} className={`navbtn ${tab === n.id ? 'active' : ''}`} onClick={() => { setTab(n.id); setNavOpen(false); }}>
             <span className="ico">{n.ico}</span><span>{n.label}</span>
           </button>
         ))}
@@ -96,7 +107,20 @@ export function App() {
 
       <main className="main">
         <header className="topbar no-print">
-          <h2>{nav.find((n) => n.id === tab)?.label}</h2>
+          <div className="row" style={{ gap: 8, minWidth: 0 }}>
+            <button
+              className="btn ghost nav-toggle"
+              onClick={() => setNavOpen((v) => !v)}
+              aria-label="القائمة"
+              aria-expanded={navOpen}
+              style={{ padding: '7px 10px', fontSize: 18 }}
+            >
+              ☰
+            </button>
+            <h2 style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {nav.find((n) => n.id === tab)?.label}
+            </h2>
+          </div>
           <div className="row" style={{ gap: 10 }}>
             <span className="muted">{settings?.hotel_name ?? ''}</span>
             <button
