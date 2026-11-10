@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { api, ApiError } from '../api';
 import { exportExcel, openPrintWindow } from '../exports';
 import { queueInvoice, listQueue, syncNow, type QueuedInvoice } from '../offline';
+import { cacheGet, cacheSet } from '../cache';
 import type { SessionUser, Settings, InvoiceSummary, InvoiceFull, InvoiceLine } from '../types';
 import { egp, egpEn, d, dt, STATUS_LABEL, ETA_LABEL, PAY_LABEL, today, addDays, nightsBetween } from '../format';
 import { calcInvoice } from '@kaoud/core';
@@ -32,9 +33,11 @@ export function Invoices({ user, settings, onPrint, openNewSignal = 0, offline =
   const [busy, setBusy] = useState(false);
   const [queue, setQueue] = useState<QueuedInvoice[]>([]);
   const [editing, setEditing] = useState<null | { id?: string; draft: DraftState }>(null);
+  const [fromCache, setFromCache] = useState(false);
 
   const load = useCallback(async () => {
     setErr('');
+    const cacheKey = `invoices:${offset}:${q}:${fNum}:${fDate}:${fGuest}:${fRoom}:${fFrom}:${fTo}:${status}`;
     try {
       const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
       if (q) params.set('q', q);
@@ -45,8 +48,13 @@ export function Invoices({ user, settings, onPrint, openNewSignal = 0, offline =
       if (fRoom) params.set('room', fRoom);
       if (status) params.set('status', status);
       const r = await api.get<{ invoices: InvoiceSummary[]; total: number }>(`/api/invoices?${params}`);
-      setList(r.invoices); setTotal(r.total);
-    } catch { if (online) setErr('تعذّر تحميل الفواتير'); }
+      setList(r.invoices); setTotal(r.total); setFromCache(false);
+      await cacheSet(cacheKey, r);
+    } catch (e) {
+      const hit = await cacheGet<{ invoices: InvoiceSummary[]; total: number }>(cacheKey);
+      if (hit) { setList(hit.data.invoices); setTotal(hit.data.total); setFromCache(true); }
+      else if (online && !(e instanceof TypeError)) setErr('تعذّر تحميل الفواتير');
+    }
   }, [q, fNum, fDate, fGuest, fRoom, fFrom, fTo, status, offset, online]);
 
   const refreshQueue = useCallback(async () => { try { setQueue(await listQueue()); } catch { /* ignore */ } }, []);
@@ -163,6 +171,7 @@ export function Invoices({ user, settings, onPrint, openNewSignal = 0, offline =
           {['admin', 'manager'].includes(user.role) && <button className="btn" disabled={busy} onClick={printRange}>طباعة كشف المدة</button>}
         </div>
         {offline && !online && <div className="alert warn" style={{ marginTop: 10 }}>أنت غير متصل — يمكنك إنشاء فواتير وستُحفظ محليًا بأرقام محجوزة وتُرفع تلقائيًا عند عودة الاتصال.</div>}
+        {fromCache && <div className="alert warn" style={{ marginTop: 10 }}>تُعرض قائمة آخر اتصال — قد لا تتضمن أحدث الفواتير.</div>}
         {info && <div className="alert ok" style={{ marginTop: 10 }}>{info}</div>}
       </div>
 

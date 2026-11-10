@@ -1,54 +1,59 @@
-import { useEffect, useState, useCallback } from 'react';
-import { api, ApiError } from '../api';
+import { useState } from 'react';
+import { newId } from '@kaoud/core';
+import { ApiError } from '../api';
 import type { SessionUser, Room, Guest, Reservation } from '../types';
 import { egp, d, today, addDays, nightsBetween } from '../format';
+import { useCachedList } from '../useCachedList';
+import { cacheAppend } from '../cache';
+import { mutate } from '../outbox';
 
 const RES_STATUS: Record<string, string> = { booked: 'محجوز', checked_in: 'داخل', checked_out: 'خرج', cancelled: 'ملغى' };
 
 export function DirectoryPage({ user }: { user: SessionUser }) {
   const canWrite = ['admin', 'manager', 'reception'].includes(user.role);
-  const [rooms, setRooms] = useState<Room[]>([]);
-  const [guests, setGuests] = useState<Guest[]>([]);
-  const [res, setRes] = useState<Reservation[]>([]);
+  const roomsQ = useCachedList<{ rooms: Room[] }>('rooms', '/api/rooms');
+  const guestsQ = useCachedList<{ guests: Guest[] }>('guests', '/api/guests');
+  const resQ = useCachedList<{ reservations: Reservation[] }>('reservations', '/api/reservations');
+  const rooms = roomsQ.data?.rooms ?? [];
+  const guests = guestsQ.data?.guests ?? [];
+  const res = resQ.data?.reservations ?? [];
   const [err, setErr] = useState('');
   const [roomForm, setRoomForm] = useState({ number: '', type: 'غرفة مزدوجة', nightlyRate: '', capacity: 2 });
   const [resForm, setResForm] = useState({ guestName: '', roomNumber: '', checkIn: today(), checkOut: addDays(today(), 1), nightlyRate: '' });
 
-  const load = useCallback(async () => {
-    try {
-      const [r, g, v] = await Promise.all([
-        api.get<{ rooms: Room[] }>('/api/rooms'),
-        api.get<{ guests: Guest[] }>('/api/guests'),
-        api.get<{ reservations: Reservation[] }>('/api/reservations'),
-      ]);
-      setRooms(r.rooms); setGuests(g.guests); setRes(v.reservations);
-    } catch { setErr('تعذّر التحميل'); }
-  }, []);
-  useEffect(() => { load(); }, [load]);
-
   async function addRoom(e: React.FormEvent) {
     e.preventDefault(); setErr('');
+    const id = newId('room');
+    const row = { id, number: roomForm.number, type: roomForm.type, nightly_rate: (Number(roomForm.nightlyRate) || 0).toFixed(2), capacity: Number(roomForm.capacity) || 2, active: 1 };
     try {
-      await api.post('/api/rooms', { number: roomForm.number, type: roomForm.type, nightlyRate: Number(roomForm.nightlyRate) || 0, capacity: Number(roomForm.capacity) || 2, active: true });
-      setRoomForm({ number: '', type: 'غرفة مزدوجة', nightlyRate: '', capacity: 2 }); await load();
+      const r = await mutate({ method: 'POST', path: '/api/rooms', label: `غرفة ${roomForm.number}`, body: { id, number: roomForm.number, type: roomForm.type, nightlyRate: Number(roomForm.nightlyRate) || 0, capacity: Number(roomForm.capacity) || 2, active: true } });
+      if (r.queued) await cacheAppend('rooms', row); else await roomsQ.reload();
+      setRoomForm({ number: '', type: 'غرفة مزدوجة', nightlyRate: '', capacity: 2 });
     } catch (e2) { setErr(`تعذّر إضافة الغرفة (${(e2 as ApiError).code})`); }
   }
 
   async function addReservation(e: React.FormEvent) {
     e.preventDefault(); setErr('');
+    const id = newId('res');
+    const row = { id, guest_name: resForm.guestName, room_number: resForm.roomNumber, check_in: resForm.checkIn, check_out: resForm.checkOut, nightly_rate: (Number(resForm.nightlyRate) || 0).toFixed(2), status: 'booked' };
     try {
-      await api.post('/api/reservations', { guestName: resForm.guestName, roomNumber: resForm.roomNumber, checkIn: resForm.checkIn, checkOut: resForm.checkOut, nightlyRate: Number(resForm.nightlyRate) || 0 });
-      setResForm({ guestName: '', roomNumber: '', checkIn: today(), checkOut: addDays(today(), 1), nightlyRate: '' }); await load();
+      const r = await mutate({ method: 'POST', path: '/api/reservations', label: `حجز ${resForm.guestName}`, body: { id, guestName: resForm.guestName, roomNumber: resForm.roomNumber, checkIn: resForm.checkIn, checkOut: resForm.checkOut, nightlyRate: Number(resForm.nightlyRate) || 0 } });
+      if (r.queued) await cacheAppend('reservations', row); else await resQ.reload();
+      setResForm({ guestName: '', roomNumber: '', checkIn: today(), checkOut: addDays(today(), 1), nightlyRate: '' });
     } catch (e2) { setErr(`تعذّر إضافة الحجز (${(e2 as ApiError).code})`); }
   }
 
   async function setResStatus(id: string, status: string) {
-    try { await api.patch(`/api/reservations/${id}`, { status }); await load(); }
-    catch (e) { setErr(`تعذّر التحديث (${(e as ApiError).code})`); }
+    try {
+      await mutate({ method: 'PATCH', path: `/api/reservations/${id}`, label: 'تحديث حالة حجز', body: { status } });
+      await resQ.reload();
+    } catch (e) { setErr(`تعذّر التحديث (${(e as ApiError).code})`); }
   }
 
+  const stale = roomsQ.fromCache || guestsQ.fromCache || resQ.fromCache;
   return (
     <>
+      {stale && <div className="alert warn">أنت غير متصل — تُعرض بيانات آخر اتصال، وأي إضافة ستُزامَن عند عودة الشبكة.</div>}
       {err && <div className="alert err">{err}</div>}
 
       {canWrite && (
