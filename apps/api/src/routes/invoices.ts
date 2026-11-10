@@ -8,7 +8,7 @@ import { requireAuth, requireRole } from '../auth-middleware.js';
 import { audit } from '../audit.js';
 import { loadSettings, loadCounter, previewNextSerial } from '../settings.js';
 import {
-  createInvoice, getInvoice, getInvoiceLines, paidTotal, effectiveTaxConfig,
+  createInvoice, getInvoice, getInvoiceLines, paidTotal, effectiveTaxConfig, nextOnlineSerial,
 } from '../invoices.js';
 import { newId } from '../audit.js';
 import { etaConfigured } from '../eta-service.js';
@@ -55,8 +55,11 @@ invoiceRoutes.get('/api/invoices', requireAuth(), async (c) => {
 });
 
 invoiceRoutes.get('/api/invoices/next-serial', requireAuth(), async (c) => {
-  const counter = await loadCounter(c.get('db'), c.get('auth').user.tenantId);
-  return c.json({ nextSerial: previewNextSerial(counter) });
+  const db = c.get('db');
+  const tenantId = c.get('auth').user.tenantId;
+  const counter = await loadCounter(db, tenantId);
+  if (!counter) return c.json({ nextSerial: previewNextSerial(counter) });
+  return c.json({ nextSerial: await nextOnlineSerial(db, tenantId, counter) });
 });
 
 invoiceRoutes.get('/api/invoices/:id', requireAuth(), async (c) => {

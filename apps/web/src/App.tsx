@@ -15,7 +15,7 @@ import { MonitoringPage } from './pages/Monitoring';
 import { ROLE_LABEL } from './format';
 import { useTheme } from './theme';
 import { useOfflineSync } from './useOffline';
-import { isOfflineEnabled, setOfflineEnabled, reserveBlock, getBlock, setBlock, cacheSettings, pendingCount } from './offline';
+import { isOfflineEnabled, setOfflineEnabled, reserveBlock, releaseBlock, cacheSettings, pendingCount } from './offline';
 import { pendingOps } from './outbox';
 import { QuickCenter } from './components/QuickCenter';
 import { Guide } from './components/Guide';
@@ -64,9 +64,14 @@ export function App() {
     const next = !offlineMode;
     if (next) {
       try {
-        const b = await getBlock();
-        if (!b) await reserveBlock(500);
+        await reserveBlock(50);
       } catch { setError('تعذّر تجهيز الوضع الأوفلاين — تأكد من الاتصال مرة واحدة أولًا'); return; }
+    } else {
+      // Leaving offline mode: hand back unused reserved numbers so the sequence
+      // returns to contiguous numbering. Only when nothing is still queued, so a
+      // not-yet-synced offline number is never reissued to an online invoice.
+      const pending = await pendingCount().catch(() => 1);
+      if (pending === 0) { try { await releaseBlock(); } catch { /* ignore */ } }
     }
     setOfflineEnabled(next);
     setOfflineMode(next);

@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { CreateUserSchema, UpdateUserSchema, SettingsSchema, ChangeSerialSchema, SerialReserveSchema } from '@kaoud/core';
+import { CreateUserSchema, UpdateUserSchema, SettingsSchema, ChangeSerialSchema, SerialReserveSchema, SerialReleaseSchema } from '@kaoud/core';
 import { passwordIssues } from '../crypto.js';
 import type { Env } from '../db.js';
 import { requireAuth, requireRole } from '../auth-middleware.js';
@@ -180,10 +180,42 @@ adminRoutes.post('/api/serial/reserve', requireAuth(), requireRole('admin', 'man
   await db.run(
     `INSERT INTO device_serials (tenant_id, device_id, start_serial, end_serial, created_at) VALUES (?, ?, ?, ?, ?)`,
     [tenantId, deviceId, start, end, new Date().toISOString()]);
-  // Keep the online counter ahead of every reserved block.
-  await db.run(`UPDATE counters SET next_serial = ? WHERE tenant_id = ? AND next_serial <= ?`, [end + 1, tenantId, end]);
+  // The block sits just past the counter; the online allocator skips over it
+  // (nextOnlineSerial), so the counter itself is left untouched and numbering
+  // stays contiguous for online invoices.
   await audit(db, { tenantId, userId: actorId, action: 'serial.reserve', entity: 'device', entityId: deviceId, detail: { start, end }, ip: clientIp(c) });
   return c.json({ deviceId, start, end, next: start });
+});
+
+// Releases a device's unused reserved numbers. Called when offline mode is turned
+// off or its queue has drained, so the freed numbers return to the sequence and
+// online numbering stays contiguous. Numbers already used by an invoice stay put.
+adminRoutes.post('/api/serial/release', requireAuth(), requireRole('admin', 'manager', 'reception'), async (c) => {
+  const db = c.get('db');
+  const { tenantId, id: actorId } = c.get('auth').user;
+  const parsed = SerialReleaseSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json({ error: 'bad_request', details: parsed.error.issues }, 400);
+  const { deviceId } = parsed.data;
+
+  const block = await db.one<{ start_serial: number; end_serial: number }>(
+    `SELECT start_serial, end_serial FROM device_serials WHERE tenant_id = ? AND device_id = ?`,
+    [tenantId, deviceId]);
+  if (!block) return c.json({ released: false });
+
+  const used = await db.one<{ m: number | null }>(
+    `SELECT MAX(serial) AS m FROM invoices WHERE tenant_id = ? AND serial BETWEEN ? AND ?`,
+    [tenantId, block.start_serial, block.end_serial]);
+
+  if (used?.m) {
+    // Keep the used prefix as a block, release the unused tail.
+    await db.run(
+      `UPDATE device_serials SET end_serial = ? WHERE tenant_id = ? AND device_id = ?`,
+      [used.m, tenantId, deviceId]);
+  } else {
+    await db.run(`DELETE FROM device_serials WHERE tenant_id = ? AND device_id = ?`, [tenantId, deviceId]);
+  }
+  await audit(db, { tenantId, userId: actorId, action: 'serial.release', entity: 'device', entityId: deviceId, detail: { start: block.start_serial, end: block.end_serial, usedUpTo: used?.m ?? null }, ip: clientIp(c) });
+  return c.json({ released: true, usedUpTo: used?.m ?? null });
 });
 
 // ---------- serial audit (gaps / duplicates) ----------

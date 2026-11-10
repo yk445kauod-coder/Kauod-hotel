@@ -129,6 +129,10 @@ export const SerialReserveSchema = z.object({
   size: z.coerce.number().int().min(1).max(500).default(100),
 });
 
+export const SerialReleaseSchema = z.object({
+  deviceId: z.string().trim().min(4).max(80),
+});
+
 export type LineItemDto = z.infer<typeof LineItemSchema>;
 export type InvoiceInputDto = z.infer<typeof InvoiceInputSchema>;
 export type SettingsDto = z.infer<typeof SettingsSchema>;

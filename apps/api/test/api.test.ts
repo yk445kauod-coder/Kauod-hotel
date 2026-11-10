@@ -330,6 +330,33 @@ describe('API integration', () => {
     expect(badBody.error).toBe('serial_not_reserved');
   });
 
+  it('heals numbering after a reserved block is released', async () => {
+    const ctx = await sharedCtx();
+    const mk = async (guest: string) => (await (await req('/api/invoices', {
+      method: 'POST', body: JSON.stringify({ guestName: guest, lines: [{ description: 'x', qty: 1, unitPrice: 100 }] }),
+    }, ctx)).json() as { invoice: { serial: number } }).invoice.serial;
+
+    const before = await mk('pre-block');
+    const reserve = await req('/api/serial/reserve', { method: 'POST', body: JSON.stringify({ deviceId: 'device-contig-01', size: 100 }) }, ctx);
+    expect(reserve.status).toBe(200);
+
+    // While the block is held, online allocation skips it (numbers are set aside
+    // for offline use) instead of colliding.
+    const held = (await (await req('/api/invoices/next-serial', {}, ctx)).json() as { nextSerial: number }).nextSerial;
+    expect(held).toBeGreaterThan(before);
+
+    // Releasing the block returns the unused numbers to the sequence.
+    const rel = await req('/api/serial/release', { method: 'POST', body: JSON.stringify({ deviceId: 'device-contig-01' }) }, ctx);
+    expect(rel.status).toBe(200);
+
+    // Numbering is contiguous again: the next online invoice follows the last one,
+    // and the preview matches what creation assigns.
+    const after = await mk('post-release');
+    expect(after).toBe(before + 1);
+    const preview = (await (await req('/api/invoices/next-serial', {}, ctx)).json() as { nextSerial: number }).nextSerial;
+    expect(preview).toBe(after + 1);
+  });
+
   it('is idempotent: a replayed offline write returns the same invoice', async () => {
     const ctx = await sharedCtx();
     const reserve = await req('/api/serial/reserve', { method: 'POST', body: JSON.stringify({ deviceId: 'device-test-02', size: 2 }) }, ctx);

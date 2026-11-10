@@ -1,7 +1,7 @@
 import { calcInvoice, parseMoney, formatMoney, uuidv4, type InvoiceInput, type CalcResult } from '@kaoud/core';
 import { Db } from './db.js';
 import { newId } from './audit.js';
-import { loadSettings, loadCounter, type Settings } from './settings.js';
+import { loadSettings, loadCounter, type Settings, type Counter } from './settings.js';
 import { etaDateTime } from '@kaoud/core';
 
 export interface InvoiceRecord {
@@ -93,6 +93,29 @@ export async function findOp(db: Db, tenantId: string, opId: string): Promise<{ 
   );
 }
 
+// The lowest serial at/after `from` that is neither used by an invoice nor
+// inside a device's reserved block. Because released blocks and synced offline
+// invoices free their numbers, this returns to the lowest gap, so online
+// numbering stays contiguous (V15-style).
+export async function lowestFreeSerial(db: Db, tenantId: string, from: number): Promise<number> {
+  const used = await db.all<{ serial: number }>(
+    `SELECT serial FROM invoices WHERE tenant_id = ? AND serial >= ? ORDER BY serial`, [tenantId, from]);
+  const blocks = await db.all<{ start_serial: number; end_serial: number }>(
+    `SELECT start_serial, end_serial FROM device_serials WHERE tenant_id = ? AND end_serial >= ? ORDER BY start_serial`, [tenantId, from]);
+  const usedSet = new Set(used.map((u) => u.serial));
+  const inBlock = (n: number) => blocks.some((b) => n >= b.start_serial && n <= b.end_serial);
+  let n = from;
+  while (usedSet.has(n) || inBlock(n)) n++;
+  return n;
+}
+
+// The next serial the ONLINE allocator should hand out: the counter, skipping
+// used numbers and device blocks so numbering stays contiguous.
+export async function nextOnlineSerial(db: Db, tenantId: string, counter: Counter): Promise<number> {
+  if (counter.next_override && counter.next_override > 0) return counter.next_override;
+  return lowestFreeSerial(db, tenantId, counter.next_serial);
+}
+
 // Allocates the next serial atomically, computes totals with the shared engine,
 // and writes the invoice + its lines. The counter is advanced only on success.
 export async function createInvoice(
@@ -120,7 +143,7 @@ export async function createInvoice(
     if (!block) throw new Error('serial_not_reserved');
     serial = input.serial;
   } else {
-    serial = counter.next_override && counter.next_override > 0 ? counter.next_override : counter.next_serial;
+    serial = await nextOnlineSerial(db, tenantId, counter);
   }
   const calc = calcInvoice(input, effectiveTaxConfig(settings, input));
   const id = input.id ?? newId('inv');

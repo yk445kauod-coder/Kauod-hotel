@@ -70,16 +70,32 @@ export function setOfflineEnabled(on: boolean) { localStorage.setItem('kaoud_off
 // ---- serial block ----------------------------------------------------------
 
 export const getBlock = () => kvGet<SerialBlock>('block');
-export const setBlock = (b: SerialBlock) => kvSet('block', b);
+export const setBlock = (b: SerialBlock | null) => kvSet('block', b);
 
 // Reserve (or reuse) a block of serials for this device. Needs connectivity.
-export async function reserveBlock(size = 500): Promise<SerialBlock> {
+// The block is small on purpose: the online allocator skips it, so any unused
+// numbers in the block become a one-off gap in the sequence. Re-reserving keeps
+// the local progress when the server returns the same block (so already-queued
+// offline numbers are never reissued), and adopts a new block if it changed.
+export async function reserveBlock(size = 50): Promise<SerialBlock> {
   const deviceId = await getDeviceId();
+  const prev = await getBlock();
   const r = await api.post<{ deviceId: string; start: number; end: number; next: number }>(
     '/api/serial/reserve', { deviceId, size });
-  const block: SerialBlock = { start: r.start, end: r.end, next: r.next };
+  const keepProgress = prev && prev.start === r.start && prev.end === r.end
+    && prev.next >= r.start && prev.next <= r.end + 1;
+  const block: SerialBlock = { start: r.start, end: r.end, next: keepProgress ? prev.next : r.next };
   await setBlock(block);
   return block;
+}
+
+// Give back this device's unused reserved numbers so the sequence returns to
+// being contiguous. Called when offline mode is switched off. Safe to call when
+// a block exists or not; the server keeps any numbers already used.
+export async function releaseBlock(): Promise<void> {
+  const deviceId = await getDeviceId();
+  try { await api.post('/api/serial/release', { deviceId }); } catch { /* stay reserved; retry next time */ return; }
+  await setBlock(null);
 }
 
 // ---- queue -----------------------------------------------------------------
