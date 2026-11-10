@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
 import { api, ApiError } from '../api';
+import { downloadJson, readJsonFile } from '../exports';
 import type { SessionUser, Settings } from '../types';
 
 export function SettingsPage({ user, onSaved }: { user: SessionUser; onSaved: () => void }) {
   const [s, setS] = useState<Settings | null>(null);
   const [msg, setMsg] = useState(''); const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
   const canEdit = ['admin', 'manager'].includes(user.role);
+  const isAdmin = user.role === 'admin';
 
   useEffect(() => { api.get<{ settings: Settings }>('/api/settings').then((r) => setS(r.settings)).catch(() => setErr('تعذّر التحميل')); }, []);
 
@@ -35,6 +38,36 @@ export function SettingsPage({ user, onSaved }: { user: SessionUser; onSaved: ()
       r.onload = () => res(String(r.result)); r.onerror = rej; r.readAsDataURL(file);
     });
     upd('logo_data', data);
+  }
+
+  async function backup() {
+    setErr(''); setMsg(''); setBusy(true);
+    try {
+      const data = await api.get<unknown>('/api/export');
+      const stamp = new Date().toISOString().slice(0, 10);
+      downloadJson(`kaoud-backup-${stamp}.json`, data);
+      setMsg('تم تنزيل النسخة الاحتياطية');
+    } catch { setErr('تعذّر إنشاء النسخة الاحتياطية'); }
+    finally { setBusy(false); }
+  }
+
+  async function restore(file: File | undefined) {
+    if (!file) return;
+    setErr(''); setMsg('');
+    if (!window.confirm('سيتم استبدال كل البيانات الحالية (الفواتير، الغرف، النزلاء، الحجوزات، الإعدادات) بمحتوى النسخة الاحتياطية. المستخدمون وكلمات المرور لن تتأثر. هل تريد المتابعة؟')) return;
+    setBusy(true);
+    try {
+      const data = await readJsonFile(file);
+      const r = await api.post<{ imported: Record<string, number> }>('/api/import', data);
+      const n = r.imported;
+      setMsg(`تم الاستيراد: ${n.invoices} فاتورة، ${n.rooms} غرفة، ${n.guests} نزيل، ${n.reservations} حجز`);
+      onSaved();
+      const fresh = await api.get<{ settings: Settings }>('/api/settings');
+      setS(fresh.settings);
+    } catch (e) {
+      const ae = e as ApiError;
+      setErr(ae.code === 'invalid_json' ? 'الملف ليس ملف نسخة احتياطية صالحًا' : `تعذّر الاستيراد (${ae.code ?? 'error'})`);
+    } finally { setBusy(false); }
   }
 
   if (!s) return <div className="muted">جارٍ التحميل…</div>;
@@ -104,6 +137,23 @@ export function SettingsPage({ user, onSaved }: { user: SessionUser; onSaved: ()
         </div>
         {canEdit && <button className="btn primary" style={{ marginTop: 14 }} onClick={save}>حفظ الإعدادات</button>}
       </div>
+
+      {isAdmin && (
+        <div className="card">
+          <h3>النسخ الاحتياطي والاستيراد</h3>
+          <p className="muted" style={{ marginTop: 0 }}>نزّل نسخة كاملة من بيانات الفندق (إعدادات، فواتير، بنود، مدفوعات، غرف، نزلاء، حجوزات) بصيغة JSON، أو استعِد نسخة سابقة.</p>
+          {msg && <div className="alert ok">{msg}</div>}
+          {err && <div className="alert err">{err}</div>}
+          <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
+            <button className="btn primary" disabled={busy} onClick={backup}>تنزيل نسخة احتياطية</button>
+            <label className="btn ghost" style={{ cursor: 'pointer' }}>
+              استيراد نسخة (استبدال)
+              <input type="file" accept="application/json,.json" hidden onChange={(e) => { restore(e.target.files?.[0]); e.target.value = ''; }} />
+            </label>
+          </div>
+          <div className="muted" style={{ marginTop: 8, fontSize: 12 }}>الاستيراد يستبدل البيانات الحالية بالكامل. حسابات المستخدمين وكلمات المرور لا تتأثر.</div>
+        </div>
+      )}
     </>
   );
 }

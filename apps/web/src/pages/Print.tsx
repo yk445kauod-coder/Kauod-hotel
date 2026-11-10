@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import { api, ApiError } from '../api';
+import { exportExcelMatrix } from '../exports';
 import type { InvoiceFull, InvoiceLine, Settings, CalcResult, Payment } from '../types';
 import { egpEn, d, PAY_LABEL, STATUS_LABEL } from '../format';
 
@@ -45,6 +46,28 @@ export function PrintView({ invoiceId, onClose }: { invoiceId: string; onClose: 
       .then(setQrUrl).catch(() => setQrUrl(''));
   }, [data]);
 
+  function exportInvoiceExcel() {
+    if (!data) return;
+    const { invoice, lines, calc, settings, paid } = data;
+    const num = (v: string | number) => Number(v || 0).toFixed(2);
+    const rows: (string | number)[][] = [
+      [settings.hotel_name, `فاتورة رقم ${invoice.serial}`, settings.hotel_name_en],
+      [`ب. ض: ${settings.tax_registration_number}`, '', `سجل تجاري: ${settings.commercial_register}`],
+      [`إلى: ${invoice.guest_name}`, '', `غرفة ${invoice.room_number || '—'}`],
+      [`التاريخ: ${invoice.issued_at.slice(0, 10)}`, '', `الحالة: ${STATUS_LABEL[invoice.status] ?? invoice.status}`],
+      ['البيان', 'الكمية', 'سعر الوحدة', 'مبلغ جزئي', 'مبلغ كلي'],
+      ...lines.map((l) => [l.description, l.qty, num(l.unit_price), num(l.net), num(l.gross)]),
+      ['إجمالي المبلغ الجزئي', '', '', num(calc.subtotalNet), num(calc.subtotalGross)],
+      [`ضريبة القيمة المضافة ${calc.vatRate}%`, '', '', '', num(calc.taxTotal)],
+      [`خصم ${calc.discountRate}%`, '', '', '', num(calc.discount)],
+      ...(Number(paid) > 0 ? [['المدفوع', '', '', '', num(paid)], ['المتبقي', '', '', '', num(Number(calc.total) - Number(paid))]] : []),
+      ['المبلغ المطلوب دفعه', '', '', '', num(calc.total)],
+      [data.totalInWords, '', '', '', ''],
+      [`UUID: ${invoice.uuid}`, '', '', '', ''],
+    ];
+    exportExcelMatrix(`invoice-${invoice.serial}.xls`, rows);
+  }
+
   if (err) return (
     <div className="content">
       <div className="alert err">{err}</div>
@@ -73,6 +96,7 @@ export function PrintView({ invoiceId, onClose }: { invoiceId: string; onClose: 
             {data.etaIssues.length > 0
               ? <span className="alert warn" style={{ margin: 0 }}>تنبيهات الضرائب: {data.etaIssues.length}</span>
               : <span className="alert ok" style={{ margin: 0 }}>بيانات الفاتورة متوافقة مع مصلحة الضرائب</span>}
+            <button className="btn" onClick={exportInvoiceExcel}>⬇ Excel</button>
             <button className="btn primary" onClick={() => window.print()}>🖨 طباعة / PDF</button>
           </div>
         </div>

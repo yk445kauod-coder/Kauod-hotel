@@ -102,6 +102,47 @@ reportRoutes.get('/api/reports/dashboard', requireAuth(), async (c) => {
   });
 });
 
+// Register: every invoice with a per-kind gross breakdown (room / restaurant /
+// services / extra) so the on-screen register can be exported as Excel/CSV.
+reportRoutes.get('/api/reports/register', requireAuth(), requireRole('admin', 'manager', 'accountant'), async (c) => {
+  const db = c.get('db');
+  const tenantId = c.get('auth').user.tenantId;
+  const from = c.req.query('from') ?? '';
+  const to = c.req.query('to') ?? '';
+  const where = ['i.tenant_id = ?'];
+  const params: unknown[] = [tenantId];
+  if (from) { where.push('i.issued_at >= ?'); params.push(from); }
+  if (to) { where.push('i.issued_at <= ?'); params.push(to + '\uffff'); }
+
+  const rows = await db.all<{
+    id: string; serial: number; issued_at: string; guest_name: string; room_number: string;
+    check_in: string | null; check_out: string | null; status: string;
+    subtotal_gross: string; subtotal_net: string; tax_total: string; discount: string; total: string;
+    stay: number; restaurant: number; services: number; extra: number;
+  }>(
+    `SELECT i.id, i.serial, i.issued_at, i.guest_name, i.room_number, i.check_in, i.check_out, i.status,
+            i.subtotal_gross, i.subtotal_net, i.tax_total, i.discount, i.total,
+            COALESCE(SUM(CASE WHEN l.kind = 'room' THEN CAST(l.gross AS REAL) ELSE 0 END), 0) AS stay,
+            COALESCE(SUM(CASE WHEN l.kind = 'restaurant' THEN CAST(l.gross AS REAL) ELSE 0 END), 0) AS restaurant,
+            COALESCE(SUM(CASE WHEN l.kind IN ('minibar','laundry') THEN CAST(l.gross AS REAL) ELSE 0 END), 0) AS services,
+            COALESCE(SUM(CASE WHEN l.kind = 'extra' THEN CAST(l.gross AS REAL) ELSE 0 END), 0) AS extra
+       FROM invoices i LEFT JOIN invoice_lines l ON l.invoice_id = i.id
+      WHERE ${where.join(' AND ')}
+      GROUP BY i.id ORDER BY i.serial`,
+    params);
+
+  return c.json({
+    rows: rows.map((r) => ({
+      id: r.id, serial: r.serial, issuedAt: r.issued_at, guest: r.guest_name, room: r.room_number,
+      checkIn: r.check_in, checkOut: r.check_out, status: r.status,
+      stay: Number(r.stay).toFixed(2), restaurant: Number(r.restaurant).toFixed(2),
+      services: Number(r.services).toFixed(2), extra: Number(r.extra).toFixed(2),
+      subtotal: Number(r.subtotal_gross).toFixed(2), net: Number(r.subtotal_net).toFixed(2),
+      tax: Number(r.tax_total).toFixed(2), discount: Number(r.discount).toFixed(2), total: Number(r.total).toFixed(2),
+    })),
+  });
+});
+
 // VAT return figures for a period (for the accountant / ETA filing).
 reportRoutes.get('/api/reports/vat', requireAuth(), requireRole('admin', 'manager', 'accountant'), async (c) => {
   const db = c.get('db');

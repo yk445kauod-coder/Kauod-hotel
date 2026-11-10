@@ -80,13 +80,16 @@ export function App() {
   const nav = NAV.filter((n) => !n.roles || n.roles.includes(user.role));
   const hotelName = settings?.hotel_name ?? 'فندق قاعود سبورتنج';
   const canWrite = ['admin', 'manager', 'reception'].includes(user.role);
-  const bottomDefs: { id: Tab; label: string; ico: string }[] = [
+  // Bottom bar: two tabs each side of a centred "+" so the FAB never crowds a tab.
+  const bnRightDefs: { id: Tab; label: string; ico: string }[] = [
     { id: 'dashboard', label: 'الرئيسية', ico: '▤' },
     { id: 'invoices', label: 'الفواتير', ico: '🧾' },
-    { id: 'reports', label: 'التقارير', ico: '📊' },
-    { id: 'directory', label: 'الغرف', ico: '🏨' },
   ];
-  const bottomItems = bottomDefs.filter((b) => nav.some((n) => n.id === b.id));
+  const bnRight = bnRightDefs.filter((b) => nav.some((n) => n.id === b.id));
+  const bnLeftTab = nav.find((n) => n.id === 'reports') ?? nav.find((n) => n.id === 'directory');
+  const bnLeft: { id: Tab; label: string; ico: string }[] = bnLeftTab
+    ? [{ id: bnLeftTab.id, label: bnLeftTab.label, ico: bnLeftTab.ico }]
+    : [];
 
   return (
     <div className="app">
@@ -155,21 +158,33 @@ export function App() {
       </main>
 
       <nav className="bottom-nav no-print" aria-label="التنقل السريع">
-        {bottomItems.map((b) => (
-          <button key={b.id} className={`bn-item ${tab === b.id ? 'active' : ''}`} onClick={() => { setTab(b.id); setNavOpen(false); }}>
-            <span className="bn-ico">{b.ico}</span>
-            <span className="bn-lbl">{b.label}</span>
+        <div className="bn-side">
+          {bnRight.map((b) => (
+            <button key={b.id} className={`bn-item ${tab === b.id ? 'active' : ''}`} onClick={() => { setTab(b.id); setNavOpen(false); }}>
+              <span className="bn-ico">{b.ico}</span>
+              <span className="bn-lbl">{b.label}</span>
+            </button>
+          ))}
+        </div>
+        {canWrite ? (
+          <div className="bn-mid">
+            <button className="bn-fab" onClick={() => { setTab('invoices'); setNewInvoiceSignal((n) => n + 1); setNavOpen(false); }} aria-label="فاتورة جديدة">
+              <span className="bn-fab-ico">+</span>
+            </button>
+          </div>
+        ) : <div className="bn-mid" aria-hidden="true" />}
+        <div className="bn-side">
+          {bnLeft.map((b) => (
+            <button key={b.id} className={`bn-item ${tab === b.id ? 'active' : ''}`} onClick={() => { setTab(b.id); setNavOpen(false); }}>
+              <span className="bn-ico">{b.ico}</span>
+              <span className="bn-lbl">{b.label}</span>
+            </button>
+          ))}
+          <button className={`bn-item ${navOpen ? 'active' : ''}`} onClick={() => setNavOpen((v) => !v)} aria-label="المزيد" aria-expanded={navOpen}>
+            <span className="bn-ico">☰</span>
+            <span className="bn-lbl">المزيد</span>
           </button>
-        ))}
-        {canWrite && (
-          <button className="bn-item bn-fab" onClick={() => { setTab('invoices'); setNewInvoiceSignal((n) => n + 1); setNavOpen(false); }} aria-label="فاتورة جديدة">
-            <span className="bn-fab-ico">+</span>
-          </button>
-        )}
-        <button className={`bn-item ${navOpen ? 'active' : ''}`} onClick={() => setNavOpen((v) => !v)} aria-label="المزيد" aria-expanded={navOpen}>
-          <span className="bn-ico">☰</span>
-          <span className="bn-lbl">المزيد</span>
-        </button>
+        </div>
       </nav>
     </div>
   );

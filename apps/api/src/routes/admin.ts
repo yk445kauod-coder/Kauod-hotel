@@ -218,8 +218,9 @@ adminRoutes.get('/api/audit', requireAuth(), requireRole('admin'), async (c) => 
 adminRoutes.get('/api/export', requireAuth(), requireRole('admin'), async (c) => {
   const db = c.get('db');
   const tenantId = c.get('auth').user.tenantId;
-  const [settings, invoices, lines, payments, rooms, guests, reservations, users] = await Promise.all([
+  const [settings, counter, invoices, lines, payments, rooms, guests, reservations, users] = await Promise.all([
     loadSettings(db, tenantId),
+    loadCounter(db, tenantId),
     db.all(`SELECT * FROM invoices WHERE tenant_id = ?`, [tenantId]),
     db.all(`SELECT * FROM invoice_lines WHERE tenant_id = ?`, [tenantId]),
     db.all(`SELECT * FROM payments WHERE tenant_id = ?`, [tenantId]),
@@ -228,5 +229,107 @@ adminRoutes.get('/api/export', requireAuth(), requireRole('admin'), async (c) =>
     db.all(`SELECT * FROM reservations WHERE tenant_id = ?`, [tenantId]),
     db.all(`SELECT id, username, name, role, active, is_owner, created_at FROM users WHERE tenant_id = ?`, [tenantId]),
   ]);
-  return c.json({ exportedAt: new Date().toISOString(), version: 1, settings, invoices, lines, payments, rooms, guests, reservations, users });
+  return c.json({ exportedAt: new Date().toISOString(), version: 1, settings, counter, invoices, lines, payments, rooms, guests, reservations, users });
+});
+
+// ---------- restore a backup produced by /api/export ----------
+// Every table is scoped to the caller's tenant, so a restore can never touch
+// another tenant's rows. Password hashes are intentionally NOT restorable:
+// the users list carries no credentials and existing logins are preserved.
+interface Backup { version?: number; settings?: Record<string, unknown>; counter?: Record<string, unknown>; invoices?: unknown[]; lines?: unknown[]; payments?: unknown[]; rooms?: unknown[]; guests?: unknown[]; reservations?: unknown[]; }
+
+const SETTINGS_COLS = ['hotel_name', 'hotel_name_en', 'tax_registration_number', 'commercial_register', 'activity_code', 'address', 'city', 'phone', 'email', 'vat_rate', 'discount_rate', 'prices_include_tax', 'serial_start', 'currency', 'logo_data', 'signature_left', 'signature_right', 'footer_note'];
+const INVOICE_COLS = ['id', 'serial', 'uuid', 'guest_id', 'guest_name', 'receiver_tax_id', 'room_number', 'check_in', 'check_out', 'status', 'issued_at', 'subtotal_net', 'subtotal_gross', 'tax_total', 'discount', 'total', 'notes', 'eta_uuid', 'eta_status', 'eta_submitted_at', 'eta_error', 'created_by', 'created_at', 'updated_at', 'locked_at', 'cancelled_at'];
+const LINE_COLS = ['id', 'invoice_id', 'description', 'qty', 'unit_price', 'kind', 'gross', 'net', 'tax', 'position'];
+const PAYMENT_COLS = ['id', 'invoice_id', 'amount', 'method', 'reference', 'paid_at', 'created_by', 'created_at'];
+const ROOM_COLS = ['id', 'number', 'type', 'nightly_rate', 'capacity', 'active'];
+const GUEST_COLS = ['id', 'name', 'phone', 'email', 'tax_id', 'address', 'created_at'];
+const RESERVATION_COLS = ['id', 'guest_id', 'guest_name', 'room_number', 'check_in', 'check_out', 'nightly_rate', 'status', 'notes', 'created_at'];
+
+function pick(obj: Record<string, unknown>, cols: string[]): unknown[] {
+  return cols.map((k) => (obj[k] === undefined ? null : obj[k]));
+}
+
+adminRoutes.post('/api/import', requireAuth(), requireRole('admin'), async (c) => {
+  const db = c.get('db');
+  const tenantId = c.get('auth').user.tenantId;
+  let body: Backup;
+  try { body = await c.req.json<Backup>(); } catch { return c.json({ error: 'invalid_json' }, 400); }
+  if (!body || typeof body !== 'object') return c.json({ error: 'invalid_backup' }, 400);
+
+  const invoices = Array.isArray(body.invoices) ? body.invoices as Record<string, unknown>[] : [];
+  const invoiceIds = new Set(invoices.map((i) => String(i.id)));
+  const lines = (Array.isArray(body.lines) ? body.lines as Record<string, unknown>[] : []).filter((l) => invoiceIds.has(String(l.invoice_id)));
+  const payments = (Array.isArray(body.payments) ? body.payments as Record<string, unknown>[] : []).filter((p) => invoiceIds.has(String(p.invoice_id)));
+  const rooms = Array.isArray(body.rooms) ? body.rooms as Record<string, unknown>[] : [];
+  const guests = Array.isArray(body.guests) ? body.guests as Record<string, unknown>[] : [];
+  const reservations = Array.isArray(body.reservations) ? body.reservations as Record<string, unknown>[] : [];
+
+  const ins = (table: string, cols: string[], rows: Record<string, unknown>[]) => rows.map((r) => ({
+    sql: `INSERT OR REPLACE INTO ${table} (tenant_id, ${cols.join(', ')}) VALUES (${['?', ...cols.map(() => '?')].join(', ')})`,
+    params: [tenantId, ...pick(r, cols)],
+  }));
+
+  const statements = [
+    { sql: `DELETE FROM payments WHERE tenant_id = ?`, params: [tenantId] },
+    { sql: `DELETE FROM invoice_lines WHERE tenant_id = ?`, params: [tenantId] },
+    { sql: `DELETE FROM invoices WHERE tenant_id = ?`, params: [tenantId] },
+    { sql: `DELETE FROM reservations WHERE tenant_id = ?`, params: [tenantId] },
+    { sql: `DELETE FROM rooms WHERE tenant_id = ?`, params: [tenantId] },
+    ...ins('guests', GUEST_COLS, guests),
+    ...ins('rooms', ROOM_COLS, rooms),
+    ...ins('reservations', RESERVATION_COLS, reservations),
+    ...ins('invoices', INVOICE_COLS, invoices),
+    ...ins('invoice_lines', LINE_COLS, lines),
+    ...ins('payments', PAYMENT_COLS, payments),
+  ];
+
+  const s = body.settings;
+  if (s && typeof s === 'object') {
+    statements.push({
+      sql: `INSERT OR REPLACE INTO settings (tenant_id, ${SETTINGS_COLS.join(', ')}, updated_at) VALUES (${['?', ...SETTINGS_COLS.map(() => '?'), '?'].join(', ')})`,
+      params: [tenantId, ...SETTINGS_COLS.map((k) => (s[k] === undefined ? null : s[k])), new Date().toISOString()],
+    });
+  }
+  const cnt = body.counter;
+  if (cnt && typeof cnt === 'object' && cnt.next_serial !== undefined) {
+    statements.push({ sql: `INSERT OR REPLACE INTO counters (tenant_id, next_serial, next_override) VALUES (?, ?, ?)`, params: [tenantId, cnt.next_serial, cnt.next_override ?? null] });
+  }
+
+  try {
+    await db.batch(statements);
+  } catch (e) {
+    return c.json({ error: 'import_failed', detail: String((e as Error).message ?? e) }, 400);
+  }
+  await audit(db, { tenantId, userId: c.get('auth').user.id, action: 'data.import', entity: 'tenant', entityId: tenantId, detail: { invoices: invoices.length, rooms: rooms.length, guests: guests.length, reservations: reservations.length }, ip: clientIp(c) });
+  return c.json({ ok: true, imported: { invoices: invoices.length, lines: lines.length, payments: payments.length, rooms: rooms.length, guests: guests.length, reservations: reservations.length } });
+});
+
+// ---------- serial review (present / missing / duplicate / cancelled) ----------
+adminRoutes.get('/api/serial/review', requireAuth(), requireRole('admin', 'manager', 'accountant'), async (c) => {
+  const db = c.get('db');
+  const tenantId = c.get('auth').user.tenantId;
+  const settings = await loadSettings(db, tenantId);
+  const start = settings?.serial_start ?? 10246;
+  const rows = await db.all<{ serial: number; n: number; cancelled: number; guests: string }>(
+    `SELECT serial, COUNT(*) AS n,
+            SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled,
+            GROUP_CONCAT(guest_name, ' / ') AS guests
+       FROM invoices WHERE tenant_id = ? GROUP BY serial`, [tenantId]);
+  const byNum = new Map(rows.map((r) => [r.serial, r]));
+  const max = rows.length ? Math.max(...rows.map((r) => r.serial)) : start - 1;
+  const entries: Array<{ serial: number; state: string; cancelled: boolean; guests: string; note: string }> = [];
+  for (let n = start; n <= max; n++) {
+    const r = byNum.get(n);
+    if (!r) {
+      entries.push({ serial: n, state: 'missing', cancelled: false, guests: '—', note: 'ابحث عنه أو حرّر محضر فقد' });
+    } else if (r.n > 1) {
+      entries.push({ serial: n, state: 'duplicate', cancelled: false, guests: r.guests, note: 'رقم مكرر — راجع الفاتورتين فورًا' });
+    } else if (r.cancelled > 0) {
+      entries.push({ serial: n, state: 'cancelled', cancelled: true, guests: r.guests, note: 'فاتورة ملغاة — الرقم لا يُعاد استخدامه' });
+    } else {
+      entries.push({ serial: n, state: 'present', cancelled: false, guests: r.guests, note: 'سليم' });
+    }
+  }
+  return c.json({ start, max, entries });
 });

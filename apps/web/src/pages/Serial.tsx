@@ -1,27 +1,29 @@
 import { useEffect, useState, useCallback } from 'react';
 import { api, ApiError } from '../api';
+import { exportExcel } from '../exports';
 import type { SessionUser } from '../types';
 
 interface SerialInfo { serialStart: number; nextSerial: number; nextOverride: number | null; }
-interface AuditRow { serial: number; state: string; }
+interface ReviewRow { serial: number; state: string; cancelled: boolean; guests: string; note: string; }
 
-const STATE_LABEL: Record<string, string> = { present: 'موجود', missing: 'ناقص', duplicate: 'مكرر' };
-const STATE_BADGE: Record<string, string> = { present: 'locked', missing: 'cancelled', duplicate: 'open' };
+const STATE_LABEL: Record<string, string> = { present: 'سليم', missing: 'ناقص', duplicate: 'مكرر', cancelled: 'ملغاة' };
+const STATE_BADGE: Record<string, string> = { present: 'locked', missing: 'cancelled', duplicate: 'open', cancelled: 'draft' };
 
 export function SerialPage({ user }: { user: SessionUser }) {
   const [info, setInfo] = useState<SerialInfo | null>(null);
-  const [audit, setAudit] = useState<AuditRow[]>([]);
+  const [review, setReview] = useState<ReviewRow[]>([]);
   const [override, setOverride] = useState('');
   const [err, setErr] = useState(''); const [msg, setMsg] = useState('');
+  const [onlyProblems, setOnlyProblems] = useState(false);
   const isAdmin = user.role === 'admin';
 
   const load = useCallback(async () => {
     try {
-      const [s, a] = await Promise.all([
+      const [s, r] = await Promise.all([
         api.get<SerialInfo>('/api/serial'),
-        api.get<{ entries: AuditRow[] }>('/api/serial/audit'),
+        api.get<{ start: number; max: number; entries: ReviewRow[] }>('/api/serial/review'),
       ]);
-      setInfo(s); setAudit(a.entries);
+      setInfo(s); setReview(r.entries);
     } catch { setErr('تعذّر التحميل'); }
   }, []);
   useEffect(() => { load(); }, [load]);
@@ -34,7 +36,22 @@ export function SerialPage({ user }: { user: SessionUser }) {
     catch (e) { const ae = e as ApiError; setErr(ae.code === 'serial_below_max' ? 'الرقم أقل من أو يساوي آخر رقم مستخدم' : `تعذّر التحديث (${ae.code})`); }
   }
 
-  const problems = audit.filter((a) => a.state !== 'present');
+  function exportReviewExcel() {
+    exportExcel({
+      title: 'فندق قاعود سبورتنج — مراجعة المسلسل',
+      headers: ['الرقم', 'موجود؟', 'ملغاة؟', 'اسم النزيل', 'الحالة', 'ملاحظة'],
+      rows: review.map((p) => [
+        p.serial,
+        p.state === 'missing' ? 'ناقص' : p.state === 'duplicate' ? 'مكرر' : 'موجود',
+        p.cancelled ? 'نعم - ملغاة' : 'لا',
+        p.guests, STATE_LABEL[p.state] ?? p.state, p.note,
+      ]),
+      filename: 'kaoud-serial-review.xls',
+    });
+  }
+
+  const problems = review.filter((a) => a.state !== 'present');
+  const shown = onlyProblems ? problems : review;
 
   return (
     <>
@@ -59,15 +76,30 @@ export function SerialPage({ user }: { user: SessionUser }) {
       )}
 
       <div className="card">
-        <div className="spread"><h3>تدقيق سلسلة الأرقام</h3><span className={`badge ${problems.length ? 'cancelled' : 'locked'}`}>{problems.length ? `${problems.length} مشكلة` : 'السلسلة سليمة'}</span></div>
-        {problems.length === 0
+        <div className="spread">
+          <h3>تدقيق سلسلة الأرقام</h3>
+          <div className="row" style={{ gap: 10 }}>
+            <span className={`badge ${problems.length ? 'cancelled' : 'locked'}`}>{problems.length ? `${problems.length} مشكلة` : 'السلسلة سليمة'}</span>
+            <button className="btn" onClick={exportReviewExcel} disabled={!review.length}>تصدير Excel</button>
+          </div>
+        </div>
+        <label className="row" style={{ alignItems: 'center', gap: 8, fontSize: 14, marginBottom: 10 }}>
+          <input type="checkbox" checked={onlyProblems} onChange={(e) => setOnlyProblems(e.target.checked)} />
+          إظهار المشاكل فقط (ناقص / مكرر)
+        </label>
+        {shown.length === 0
           ? <div className="muted">لا توجد أرقام ناقصة أو مكررة.</div>
           : (
             <table data-mobile="cards">
-              <thead><tr><th>الرقم</th><th>الحالة</th></tr></thead>
+              <thead><tr><th>الرقم</th><th>الحالة</th><th>النزيل</th><th>ملاحظة</th></tr></thead>
               <tbody>
-                {problems.map((p) => (
-                  <tr key={p.serial}><td className="mono" data-label="الرقم">{p.serial}</td><td data-label="الحالة"><span className={`badge ${STATE_BADGE[p.state]}`}>{STATE_LABEL[p.state]}</span></td></tr>
+                {shown.map((p) => (
+                  <tr key={p.serial}>
+                    <td className="mono" data-label="الرقم">{p.serial}</td>
+                    <td data-label="الحالة"><span className={`badge ${STATE_BADGE[p.state]}`}>{STATE_LABEL[p.state]}</span></td>
+                    <td data-label="النزيل">{p.guests}</td>
+                    <td className="muted" data-label="ملاحظة">{p.note}</td>
+                  </tr>
                 ))}
               </tbody>
             </table>
