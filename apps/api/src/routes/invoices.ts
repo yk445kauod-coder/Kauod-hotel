@@ -8,7 +8,7 @@ import { requireAuth, requireRole } from '../auth-middleware.js';
 import { audit } from '../audit.js';
 import { loadSettings, loadCounter, previewNextSerial } from '../settings.js';
 import {
-  createInvoice, getInvoice, getInvoiceLines, paidTotal, taxConfigFromSettings,
+  createInvoice, getInvoice, getInvoiceLines, paidTotal, effectiveTaxConfig,
 } from '../invoices.js';
 import { newId } from '../audit.js';
 import { etaConfigured } from '../eta-service.js';
@@ -86,17 +86,21 @@ invoiceRoutes.put('/api/invoices/:id', requireAuth(), requireRole('admin', 'mana
   if (!parsed.success) return c.json({ error: 'bad_request', details: parsed.error.issues }, 400);
   const settings = await loadSettings(db, tenantId);
   if (!settings) return c.json({ error: 'settings_missing' }, 500);
-  const calc = calcInvoice(parsed.data, taxConfigFromSettings(settings));
+  const calc = calcInvoice(parsed.data, effectiveTaxConfig(settings, parsed.data));
   const now = new Date().toISOString();
 
   const stmts: Array<{ sql: string; params: unknown[] }> = [
     { sql: `DELETE FROM invoice_lines WHERE invoice_id = ? AND tenant_id = ?`, params: [inv.id, tenantId] },
     {
       sql: `UPDATE invoices SET guest_name = ?, room_number = ?, check_in = ?, check_out = ?,
-              subtotal_net = ?, subtotal_gross = ?, tax_total = ?, discount = ?, total = ?, notes = ?, updated_at = ?
+              subtotal_net = ?, subtotal_gross = ?, tax_total = ?, discount = ?, total = ?, notes = ?,
+              vat_rate = ?, discount_rate = ?, issuer_name = ?, issuer_tax_id = ?, issuer_address = ?, updated_at = ?
             WHERE id = ? AND tenant_id = ?`,
       params: [parsed.data.guestName, parsed.data.roomNumber ?? '', parsed.data.checkIn ?? null, parsed.data.checkOut ?? null,
-        calc.subtotalNet, calc.subtotalGross, calc.taxTotal, calc.discount, calc.total, parsed.data.notes ?? '', now, inv.id, tenantId],
+        calc.subtotalNet, calc.subtotalGross, calc.taxTotal, calc.discount, calc.total, parsed.data.notes ?? '',
+        parsed.data.vatRate ?? null, parsed.data.discountRate ?? null,
+        parsed.data.issuerName ?? null, parsed.data.issuerTaxId ?? null, parsed.data.issuerAddress ?? null,
+        now, inv.id, tenantId],
     },
   ];
   calc.lines.forEach((l, idx) => {
@@ -170,23 +174,29 @@ invoiceRoutes.get('/api/invoices/:id/print', requireAuth(), async (c) => {
     checkIn: inv.check_in ?? undefined,
     checkOut: inv.check_out ?? undefined,
     lines: lines.map((l) => ({ description: l.description, qty: l.qty, unitPrice: l.unit_price, kind: l.kind as 'extra' })),
-  }, taxConfigFromSettings(settings));
+  }, effectiveTaxConfig(settings, { vatRate: inv.vat_rate, discountRate: inv.discount_rate }));
+
+  // Per-invoice overrides win over the tenant settings for issuer identity too.
+  const issuerName = inv.issuer_name || settings.hotel_name;
+  const issuerTaxId = inv.issuer_tax_id || settings.tax_registration_number;
+  const issuerAddress = inv.issuer_address || settings.address;
 
   const etaDoc = buildEtaDocument({
     serial: inv.serial, issuedAt: etaDateTime(new Date(inv.issued_at)), receiverName: inv.guest_name,
     receiverTaxId: inv.receiver_tax_id || undefined, calc,
     issuer: {
-      taxRegistrationNumber: settings.tax_registration_number, name: settings.hotel_name,
+      taxRegistrationNumber: issuerTaxId, name: issuerName,
       activityCode: settings.activity_code,
-      address: { country: 'EG', governate: settings.city, regionCity: settings.city, street: settings.address || '-', buildingNumber: '-' },
+      address: { country: 'EG', governate: settings.city, regionCity: settings.city, street: issuerAddress || '-', buildingNumber: '-' },
     },
   });
   const qr = etaQrPayload({
-    sellerName: settings.hotel_name, vatNumber: settings.tax_registration_number,
+    sellerName: issuerName, vatNumber: issuerTaxId,
     issuedAt: etaDateTime(new Date(inv.issued_at)), total: calc.total, vatTotal: calc.taxTotal, uuid: inv.uuid,
   });
   return c.json({
     invoice: inv, lines, calc, settings, paid, qr,
+    issuer: { name: issuerName, taxId: issuerTaxId, address: issuerAddress, city: settings.city },
     etaIssues: validateEtaDocument(etaDoc).map((i) => `${i.path}: ${i.message}`),
     etaConfigured: etaConfigured(c.env),
   });

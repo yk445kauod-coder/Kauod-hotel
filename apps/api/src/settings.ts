@@ -18,6 +18,10 @@ export interface Settings {
   prices_include_tax: number;
   serial_start: number;
   currency: string;
+  logo_data: string;
+  signature_left: string;
+  signature_right: string;
+  footer_note: string;
 }
 
 export async function loadSettings(db: Db, tenantId: string): Promise<Settings | null> {

@@ -22,6 +22,12 @@ export const InvoiceInputSchema = z.object({
   notes: z.string().trim().max(1000).optional().default(''),
   guestId: z.string().uuid().optional(),
   reservationId: z.string().uuid().optional(),
+  // Per-invoice tax/branding overrides. Omitted or null = inherit from settings.
+  vatRate: z.coerce.number().min(0).max(100).nullable().optional(),
+  discountRate: z.coerce.number().min(0).max(100).nullable().optional(),
+  issuerName: z.string().trim().max(200).nullable().optional(),
+  issuerTaxId: z.string().trim().regex(/^\d{9}$/, 'must be exactly 9 digits').nullable().optional(),
+  issuerAddress: z.string().trim().max(300).nullable().optional(),
 }).superRefine((v, ctx) => {
   if (v.checkIn && v.checkOut && Date.parse(v.checkOut) <= Date.parse(v.checkIn)) {
     ctx.addIssue({ code: 'custom', path: ['checkOut'], message: 'checkOut must be after checkIn' });
@@ -97,6 +103,10 @@ export const SettingsSchema = z.object({
   pricesIncludeTax: z.boolean(),
   serialStart: z.coerce.number().int().min(1),
   currency: z.string().trim().length(3).default('EGP'),
+  logoData: z.string().trim().max(400_000).optional().default(''),
+  signatureLeft: z.string().trim().max(120).optional().default('المدير المالي|Financial Controller'),
+  signatureRight: z.string().trim().max(120).optional().default('مدير الائتمان|Credit Manager'),
+  footerNote: z.string().trim().max(300).optional().default('هذه الفاتورة صادرة إلكترونيًا وفق منظومة الفاتورة الإلكترونية لمصلحة الضرائب المصرية.'),
 });
 
 export const ChangeSerialSchema = z.object({

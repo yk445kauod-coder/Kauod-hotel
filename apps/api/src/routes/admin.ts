@@ -103,11 +103,13 @@ adminRoutes.put('/api/settings', requireAuth(), requireRole('admin', 'manager'),
   await db.run(
     `UPDATE settings SET hotel_name = ?, hotel_name_en = ?, tax_registration_number = ?, commercial_register = ?,
        activity_code = ?, address = ?, city = ?, phone = ?, email = ?, vat_rate = ?, discount_rate = ?,
-       prices_include_tax = ?, serial_start = ?, currency = ?, updated_at = ?
+       prices_include_tax = ?, serial_start = ?, currency = ?, logo_data = ?, signature_left = ?,
+       signature_right = ?, footer_note = ?, updated_at = ?
      WHERE tenant_id = ?`,
     [d.hotelName, d.hotelNameEn ?? '', d.taxRegistrationNumber, d.commercialRegister ?? '', d.activityCode,
       d.address ?? '', d.city ?? 'Alexandria', d.phone ?? '', d.email ?? '', d.vatRate, d.discountRate,
-      d.pricesIncludeTax ? 1 : 0, d.serialStart, d.currency, new Date().toISOString(), tenantId]);
+      d.pricesIncludeTax ? 1 : 0, d.serialStart, d.currency, d.logoData ?? '', d.signatureLeft ?? '',
+      d.signatureRight ?? '', d.footerNote ?? '', new Date().toISOString(), tenantId]);
   await audit(db, { tenantId, userId: actorId, action: 'settings.update', entity: 'settings', entityId: tenantId, ip: clientIp(c) });
   return c.json({ settings: await loadSettings(db, tenantId) });
 });

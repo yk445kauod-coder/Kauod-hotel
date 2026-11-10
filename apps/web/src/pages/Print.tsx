@@ -2,11 +2,17 @@ import { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import { api, ApiError } from '../api';
 import type { InvoiceFull, InvoiceLine, Settings, CalcResult, Payment } from '../types';
-import { egpEn, d, dt, STATUS_LABEL, PAY_LABEL } from '../format';
+import { egpEn, d, PAY_LABEL } from '../format';
 
+interface Issuer { name: string; taxId: string; address: string; city: string; }
 interface PrintData {
   invoice: InvoiceFull; lines: InvoiceLine[]; calc: CalcResult; settings: Settings;
-  paid: string; qr: string; etaIssues: string[]; etaConfigured: boolean;
+  paid: string; qr: string; etaIssues: string[]; etaConfigured: boolean; issuer: Issuer;
+}
+
+function sig(label: string): [string, string] {
+  const [ar, en] = (label || '').split('|');
+  return [ar ?? '', en ?? ''];
 }
 
 export function PrintView({ invoiceId, onClose }: { invoiceId: string; onClose: () => void }) {
@@ -45,8 +51,11 @@ export function PrintView({ invoiceId, onClose }: { invoiceId: string; onClose: 
   );
   if (!data) return <div className="content muted">جارٍ التحميل…</div>;
 
-  const { invoice, lines, calc, settings, paid } = data;
+  const { invoice, lines, calc, settings, paid, issuer } = data;
   const remaining = (Number(calc.total) - Number(paid)).toFixed(2);
+  const [sigLar, sigLen] = sig(settings.signature_left);
+  const [sigRar, sigRen] = sig(settings.signature_right);
+  const cancelled = invoice.status === 'cancelled';
 
   return (
     <div>
@@ -68,95 +77,123 @@ export function PrintView({ invoiceId, onClose }: { invoiceId: string; onClose: 
       </div>
 
       <div className="print-area">
-        <div className="print-head">
-          <div>
-            <div style={{ fontSize: 20, fontWeight: 700 }}>{settings.hotel_name}</div>
-            <div style={{ fontSize: 13 }}>{settings.hotel_name_en}</div>
-            <div style={{ fontSize: 12, marginTop: 4 }}>{settings.address} — {settings.city}</div>
-            <div style={{ fontSize: 12 }}>هاتف: {settings.phone || '—'} — {settings.email || '—'}</div>
-          </div>
-          <div style={{ textAlign: 'left', fontSize: 12 }} dir="ltr">
-            <div><strong>Tax ID:</strong> {settings.tax_registration_number}</div>
-            <div><strong>CR:</strong> {settings.commercial_register || '—'}</div>
-            <div><strong>Activity:</strong> {settings.activity_code}</div>
-          </div>
-        </div>
+        <div className="inv">
+          <div className="inv-bar" />
+          {cancelled && (
+            <>
+              <div className="inv-cancel">✕ فاتورة ملغية — CANCELLED ✕</div>
+              <div className="inv-cancel-note">هذه الفاتورة ملغية ولا يعتد بها — لا تستخدمها كفاتورة سليمة</div>
+            </>
+          )}
 
-        <div className="print-title">فاتورة ضريبية إلكترونية</div>
-        <div style={{ textAlign: 'center', fontSize: 12, marginBottom: 10 }}>
-          Tax Invoice — رقم الفاتورة: <span className="mono">{invoice.serial}</span> — UUID: <span className="mono">{invoice.uuid}</span>
-        </div>
-
-        <table style={{ marginBottom: 12 }}>
-          <tbody>
-            <tr>
-              <td><strong>النزيل:</strong> {invoice.guest_name}</td>
-              <td><strong>الرقم الضريبي:</strong> {invoice.receiver_tax_id || '—'}</td>
-            </tr>
-            <tr>
-              <td><strong>الغرفة:</strong> {invoice.room_number || '—'}</td>
-              <td><strong>تاريخ الإصدار:</strong> {dt(invoice.issued_at)}</td>
-            </tr>
-            <tr>
-              <td><strong>الدخول:</strong> {d(invoice.check_in)}</td>
-              <td><strong>الخروج:</strong> {d(invoice.check_out)}</td>
-            </tr>
-          </tbody>
-        </table>
-
-        <table>
-          <thead>
-            <tr><th style={{ width: '6%' }}>#</th><th>الوصف</th><th style={{ width: '10%' }}>الكمية</th><th style={{ width: '16%' }}>سعر الوحدة</th><th style={{ width: '18%' }}>الإجمالي</th></tr>
-          </thead>
-          <tbody>
-            {lines.map((l, i) => (
-              <tr key={l.id}>
-                <td>{i + 1}</td>
-                <td>{l.description}</td>
-                <td className="num">{l.qty}</td>
-                <td className="num">{egpEn(l.unit_price)}</td>
-                <td className="num">{egpEn(l.gross)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 14 }}>
-          <div style={{ fontSize: 12 }}>
-            {invoice.notes && <div><strong>ملاحظات:</strong> {invoice.notes}</div>}
-            {payments.length > 0 && (
-              <div style={{ marginTop: 8 }}>
-                <strong>المدفوعات:</strong>
-                <table style={{ marginTop: 4, fontSize: 12 }}>
-                  <tbody>
-                    {payments.map((p) => (
-                      <tr key={p.id}><td>{PAY_LABEL[p.method] ?? p.method}</td><td>{d(p.paid_at)}</td><td className="num">{egpEn(p.amount)}</td></tr>
-                    ))}
-                  </tbody>
-                </table>
+          <div className="inv-head">
+            <div className="inv-seller">
+              <div>ب. ض : {issuer.taxId}</div>
+              {settings.commercial_register && <div>سجل تجاري : {settings.commercial_register}</div>}
+              <div className="inv-city">{issuer.city} | {settings.city}</div>
+            </div>
+            <div className="inv-brand">
+              {settings.logo_data && <img src={settings.logo_data} alt="logo" />}
+              <div className="inv-name">{settings.hotel_name}</div>
+              {settings.hotel_name_en && <div className="inv-name-en">{settings.hotel_name_en}</div>}
+            </div>
+            <div className="inv-meta">
+              <div className="inv-invoice-box">
+                <div className="inv-invoice-label">فاتورة INVOICE</div>
+                <div className="inv-invoice-no">No. {invoice.serial}</div>
               </div>
-            )}
+              <div className="inv-date">{d(invoice.issued_at)}</div>
+            </div>
           </div>
-          <table style={{ width: 300 }}>
+
+          <div className="inv-rule" />
+
+          <div className="inv-cards">
+            <div className="inv-billto">
+              <div className="inv-billto-label">إلى — BILL TO</div>
+              <div className="inv-billto-name">{invoice.guest_name}</div>
+              <div className="inv-billto-sub">
+                {invoice.room_number ? <>غرفة Room {invoice.room_number} • </> : null}
+                {d(invoice.check_in)} → {d(invoice.check_out)} • {calc.nights} ليالي
+              </div>
+              {invoice.receiver_tax_id && <div className="inv-billto-sub">الرقم الضريبي: {invoice.receiver_tax_id}</div>}
+            </div>
+            <div className="inv-total-box">
+              <div className="inv-total-label">التاريخ DATE</div>
+              <div className="inv-total-date">{d(invoice.issued_at)}</div>
+              <div className="inv-total-label" style={{ marginTop: 10 }}>المبلغ المطلوب TOTAL DUE</div>
+              <div className="inv-total-amount">{egpEn(calc.total)}</div>
+            </div>
+          </div>
+
+          <table className="inv-lines">
+            <thead>
+              <tr>
+                <th className="c-desc">البيان DESCRIPTION</th>
+                <th className="c-num">مبلغ جزئي<br />SUBTOTAL</th>
+                <th className="c-num">مبلغ كلي<br />TOTAL</th>
+              </tr>
+            </thead>
             <tbody>
-              <tr><td>الإجمالي قبل الضريبة</td><td className="num">{egpEn(calc.subtotalGross)}</td></tr>
-              <tr><td>الصافي</td><td className="num">{egpEn(calc.subtotalNet)}</td></tr>
-              <tr><td>الخصم</td><td className="num">{egpEn(calc.discount)}</td></tr>
-              <tr><td>ضريبة القيمة المضافة {settings.vat_rate}%</td><td className="num">{egpEn(calc.taxTotal)}</td></tr>
-              <tr style={{ borderTop: '2px solid #000', fontWeight: 700 }}><td>الإجمالي المستحق</td><td className="num">{egpEn(calc.total)}</td></tr>
-              <tr><td>المدفوع</td><td className="num">{egpEn(paid)}</td></tr>
-              <tr><td>المتبقي</td><td className="num">{egpEn(remaining)}</td></tr>
+              {lines.map((l, i) => (
+                <tr key={l.id}>
+                  <td className="c-desc">
+                    <div className="inv-line-desc">{l.description}</div>
+                    <div className="inv-line-sub">الكمية {l.qty} • سعر الوحدة {egpEn(l.unit_price)}</div>
+                  </td>
+                  <td className="c-num">{egpEn(l.net)}</td>
+                  <td className="c-num">{egpEn(l.gross)}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
-        </div>
 
-        <div className="qr">
-          {qrUrl && <img src={qrUrl} alt="ETA QR" />}
-          <div style={{ fontSize: 11 }}>رمز الاستجابة السريعة لمصلحة الضرائب المصرية</div>
-        </div>
+          <div className="inv-summary-wrap">
+            <div className="inv-summary">
+              <div><span>الإجمالي قبل الضريبة</span><b>{egpEn(calc.subtotalGross)}</b></div>
+              <div><span>الصافي</span><b>{egpEn(calc.subtotalNet)}</b></div>
+              <div><span>ضريبة القيمة المضافة {calc.vatRate}%</span><b>{egpEn(calc.taxTotal)}</b></div>
+              <div><span>خصم {calc.discountRate}%</span><b>{egpEn(calc.discount)}</b></div>
+              <div className="inv-grand"><span>المبلغ المطلوب دفعه</span><b>{egpEn(calc.total)}</b></div>
+              {Number(paid) > 0 && <div><span>المدفوع</span><b>{egpEn(paid)}</b></div>}
+              {Number(paid) > 0 && <div><span>المتبقي</span><b>{egpEn(remaining)}</b></div>}
+            </div>
+          </div>
 
-        <div style={{ marginTop: 20, fontSize: 11, textAlign: 'center', color: '#444' }}>
-          هذه الفاتورة صادرة إلكترونيًا وفق منظومة الفاتورة الإلكترونية لمصلحة الضرائب المصرية.
+          {payments.length > 0 && (
+            <table className="inv-lines" style={{ marginTop: 12 }}>
+              <thead><tr><th className="c-desc">المدفوعات</th><th className="c-num">الطريقة</th><th className="c-num">التاريخ</th><th className="c-num">المبلغ</th></tr></thead>
+              <tbody>
+                {payments.map((p) => (
+                  <tr key={p.id}><td className="c-desc">{PAY_LABEL[p.method] ?? p.method}</td><td className="c-num">{p.reference || '—'}</td><td className="c-num">{d(p.paid_at)}</td><td className="c-num">{egpEn(p.amount)}</td></tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          <div className="inv-signs">
+            <div className="inv-sign">
+              <div className="inv-sign-line" />
+              <div className="inv-sign-ar">{sigLar}</div>
+              {sigLen && <div className="inv-sign-en">{sigLen}</div>}
+            </div>
+            <div className="inv-sign">
+              <div className="inv-sign-line" />
+              <div className="inv-sign-ar">{sigRar}</div>
+              {sigRen && <div className="inv-sign-en">{sigRen}</div>}
+            </div>
+          </div>
+
+          <div className="inv-foot">
+            <div className="qr">
+              {qrUrl && <img src={qrUrl} alt="ETA QR" />}
+              <div className="inv-qr-note">رمز الاستجابة السريعة لمصلحة الضرائب المصرية</div>
+            </div>
+            <div className="inv-foot-text">
+              {settings.footer_note}
+              <div className="inv-foot-uuid">UUID: <span className="mono">{invoice.uuid}</span></div>
+            </div>
+          </div>
         </div>
       </div>
       <canvas ref={qrRef} style={{ display: 'none' }} />

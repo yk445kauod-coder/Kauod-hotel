@@ -23,6 +23,11 @@ export interface InvoiceRecord {
   discount: string;
   total: string;
   notes: string;
+  vat_rate: number | null;
+  discount_rate: number | null;
+  issuer_name: string | null;
+  issuer_tax_id: string | null;
+  issuer_address: string | null;
   eta_uuid: string | null;
   eta_status: string;
   eta_submitted_at: string | null;
@@ -41,10 +46,29 @@ export function taxConfigFromSettings(s: Settings) {
   };
 }
 
+export interface TaxOverrides {
+  vatRate?: number | null;
+  discountRate?: number | null;
+}
+
+// Per-invoice overrides win; null/undefined falls back to the tenant settings.
+export function effectiveTaxConfig(s: Settings, o: TaxOverrides) {
+  return {
+    vatRate: o.vatRate ?? s.vat_rate,
+    discountRate: o.discountRate ?? s.discount_rate,
+    pricesIncludeTax: !!s.prices_include_tax,
+  };
+}
+
 export interface CreateInvoiceInput extends InvoiceInput {
   guestId?: string;
   reservationId?: string;
   receiverTaxId?: string;
+  vatRate?: number | null;
+  discountRate?: number | null;
+  issuerName?: string | null;
+  issuerTaxId?: string | null;
+  issuerAddress?: string | null;
 }
 
 // Allocates the next serial atomically, computes totals with the shared engine,
@@ -58,7 +82,7 @@ export async function createInvoice(
   if (!counter) throw new Error('counter_missing');
 
   const serial = counter.next_override && counter.next_override > 0 ? counter.next_override : counter.next_serial;
-  const calc = calcInvoice(input, taxConfigFromSettings(settings));
+  const calc = calcInvoice(input, effectiveTaxConfig(settings, input));
   const id = newId('inv');
   const now = new Date().toISOString();
   const uuid = uuidv4();
@@ -68,13 +92,16 @@ export async function createInvoice(
       sql: `INSERT INTO invoices
         (id, tenant_id, serial, uuid, guest_id, guest_name, receiver_tax_id, room_number, check_in, check_out,
          status, issued_at, subtotal_net, subtotal_gross, tax_total, discount, total, notes,
+         vat_rate, discount_rate, issuer_name, issuer_tax_id, issuer_address,
          eta_uuid, eta_status, created_by, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?, ?, ?, ?, ?, 'unconfigured', ?, ?, ?)`,
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unconfigured', ?, ?, ?)`,
       params: [
         id, tenantId, serial, uuid, input.guestId ?? null, input.guestName, input.receiverTaxId ?? '',
         input.roomNumber ?? '', input.checkIn ?? null, input.checkOut ?? null,
         etaDateTime(), calc.subtotalNet, calc.subtotalGross, calc.taxTotal, calc.discount, calc.total,
-        input.notes ?? '', uuid, userId, now, now,
+        input.notes ?? '', input.vatRate ?? null, input.discountRate ?? null,
+        input.issuerName ?? null, input.issuerTaxId ?? null, input.issuerAddress ?? null,
+        uuid, userId, now, now,
       ],
     },
   ];

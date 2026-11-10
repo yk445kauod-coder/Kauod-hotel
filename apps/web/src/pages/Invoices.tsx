@@ -111,6 +111,7 @@ export function Invoices({ user, settings, onPrint }: { user: SessionUser; setti
 interface DraftState {
   guestName: string; roomNumber: string; checkIn: string; checkOut: string;
   receiverTaxId: string; notes: string; applyDiscount: boolean; lines: DraftLine[];
+  vatRate: string; discountRate: string; issuerName: string; issuerTaxId: string; issuerAddress: string;
 }
 
 function blankDraft(settings: Settings | null): DraftState {
@@ -119,19 +120,24 @@ function blankDraft(settings: Settings | null): DraftState {
     guestName: '', roomNumber: '', checkIn: t, checkOut: addDays(t, 1), receiverTaxId: '', notes: '',
     applyDiscount: (settings?.discount_rate ?? 0) > 0,
     lines: [{ description: '', qty: 1, unitPrice: '', kind: 'room' }],
+    vatRate: '', discountRate: '', issuerName: '', issuerTaxId: '', issuerAddress: '',
   };
 }
 
 async function openEdit(id: string, setEditing: (v: { id: string; draft: DraftState }) => void) {
   const r = await api.get<{ invoice: InvoiceFull; lines: InvoiceLine[] }>(`/api/invoices/${id}`);
+  const iv = r.invoice;
+  const opt = (v: number | null) => (v === null || v === undefined ? '' : String(v));
   setEditing({
     id,
     draft: {
-      guestName: r.invoice.guest_name, roomNumber: r.invoice.room_number,
-      checkIn: r.invoice.check_in ?? today(), checkOut: r.invoice.check_out ?? today(),
-      receiverTaxId: r.invoice.receiver_tax_id, notes: r.invoice.notes,
-      applyDiscount: Number(r.invoice.discount) > 0,
+      guestName: iv.guest_name, roomNumber: iv.room_number,
+      checkIn: iv.check_in ?? today(), checkOut: iv.check_out ?? today(),
+      receiverTaxId: iv.receiver_tax_id, notes: iv.notes,
+      applyDiscount: Number(iv.discount) > 0,
       lines: r.lines.map((l) => ({ description: l.description, qty: l.qty, unitPrice: l.unit_price, kind: l.kind })),
+      vatRate: opt(iv.vat_rate), discountRate: opt(iv.discount_rate),
+      issuerName: iv.issuer_name ?? '', issuerTaxId: iv.issuer_tax_id ?? '', issuerAddress: iv.issuer_address ?? '',
     },
   });
 }
@@ -144,17 +150,21 @@ function InvoiceEditor({ user, settings, id, initial, onClose, onSaved }: {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [nextSerial, setNextSerial] = useState<number | null>(null);
+  const [showTax, setShowTax] = useState(false);
 
   useEffect(() => {
     if (id) return;
     api.get<{ nextSerial: number }>('/api/invoices/next-serial').then((r) => setNextSerial(r.nextSerial)).catch(() => {});
   }, [id]);
 
+  const optNum = (v: string): number | undefined => (v.trim() === '' ? undefined : Number(v));
   const taxCfg = {
-    vatRate: settings?.vat_rate ?? 14,
-    discountRate: settings?.discount_rate ?? 3,
+    vatRate: optNum(draft.vatRate) ?? settings?.vat_rate ?? 14,
+    discountRate: optNum(draft.discountRate) ?? settings?.discount_rate ?? 3,
     pricesIncludeTax: (settings?.prices_include_tax ?? 1) === 1,
   };
+  const hasOverrides = draft.vatRate.trim() !== '' || draft.discountRate.trim() !== ''
+    || draft.issuerName.trim() !== '' || draft.issuerTaxId.trim() !== '' || draft.issuerAddress.trim() !== '';
   const calc = calcInvoice({
     guestName: draft.guestName || '—',
     checkIn: draft.checkIn, checkOut: draft.checkOut, applyDiscount: draft.applyDiscount,
@@ -176,6 +186,11 @@ function InvoiceEditor({ user, settings, id, initial, onClose, onSaved }: {
         receiverTaxId: draft.receiverTaxId.trim() || undefined,
         notes: draft.notes.trim() || undefined,
         applyDiscount: draft.applyDiscount,
+        vatRate: optNum(draft.vatRate) ?? null,
+        discountRate: optNum(draft.discountRate) ?? null,
+        issuerName: draft.issuerName.trim() || null,
+        issuerTaxId: draft.issuerTaxId.trim() || null,
+        issuerAddress: draft.issuerAddress.trim() || null,
         lines: draft.lines.filter((l) => l.description.trim()).map((l) => ({
           description: l.description.trim(), qty: Number(l.qty) || 1, unitPrice: l.unitPrice || '0', kind: l.kind,
         })),
@@ -214,6 +229,26 @@ function InvoiceEditor({ user, settings, id, initial, onClose, onSaved }: {
         <label className="field">تاريخ الدخول<input type="date" value={draft.checkIn} onChange={(e) => setDraft({ ...draft, checkIn: e.target.value })} /></label>
         <label className="field">تاريخ الخروج<input type="date" value={draft.checkOut} onChange={(e) => setDraft({ ...draft, checkOut: e.target.value })} /></label>
         <label className="field">عدد الليالي<input value={nights} readOnly dir="ltr" /></label>
+      </div>
+
+      <div style={{ marginTop: 14 }}>
+        <button className="btn ghost" onClick={() => setShowTax((v) => !v)}>
+          {showTax ? '▾' : '▸'} بيانات الضريبة والإصدار {hasOverrides ? '(مخصّصة لهذه الفاتورة)' : '(من الإعدادات)'}
+        </button>
+        {showTax && (
+          <div className="card" style={{ marginTop: 8, background: 'var(--surface-2)' }}>
+            <div className="muted" style={{ fontSize: 12.5, marginBottom: 10 }}>
+              اترك الحقل فارغًا لاستخدام الإعدادات العامة. املأه لتخصيص هذه الفاتورة فقط. لا يمكن تعديلها بعد قفل الفاتورة.
+            </div>
+            <div className="grid cols-3">
+              <label className="field">نسبة الضريبة %<input type="number" min="0" max="100" step="0.01" dir="ltr" value={draft.vatRate} placeholder={`${settings?.vat_rate ?? 14}`} onChange={(e) => setDraft({ ...draft, vatRate: e.target.value })} /></label>
+              <label className="field">نسبة الخصم %<input type="number" min="0" max="100" step="0.01" dir="ltr" value={draft.discountRate} placeholder={`${settings?.discount_rate ?? 3}`} onChange={(e) => setDraft({ ...draft, discountRate: e.target.value })} /></label>
+              <label className="field">اسم المُصدر<input value={draft.issuerName} placeholder={settings?.hotel_name ?? ''} onChange={(e) => setDraft({ ...draft, issuerName: e.target.value })} /></label>
+              <label className="field">الرقم الضريبي للمُصدر<input dir="ltr" value={draft.issuerTaxId} placeholder={settings?.tax_registration_number ?? ''} onChange={(e) => setDraft({ ...draft, issuerTaxId: e.target.value })} /></label>
+              <label className="field">عنوان المُصدر<input value={draft.issuerAddress} placeholder={settings?.address ?? ''} onChange={(e) => setDraft({ ...draft, issuerAddress: e.target.value })} /></label>
+            </div>
+          </div>
+        )}
       </div>
 
       <h4 style={{ marginTop: 18 }}>بنود الفاتورة</h4>

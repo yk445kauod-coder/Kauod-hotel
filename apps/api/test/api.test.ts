@@ -95,6 +95,14 @@ async function bootstrapAndLogin(): Promise<Ctx> {
 }
 // (bootstrap is idempotent-safe here: a repeat returns 409 and we ignore it)
 
+// Login is rate-limited (10 per 5 min per IP), so reuse one session for the
+// read-mostly assertions at the end of the file.
+let sharedPromise: Promise<Ctx> | null = null;
+function sharedCtx(): Promise<Ctx> {
+  if (!sharedPromise) sharedPromise = bootstrapAndLogin();
+  return sharedPromise;
+}
+
 describe('API integration', () => {
   it('health', async () => {
     const res = await req('/api/health');
@@ -198,5 +206,77 @@ describe('API integration', () => {
     const ctx = await bootstrapAndLogin();
     const res = await req('/api/invoices/inv_does_not_exist', {}, ctx);
     expect(res.status).toBe(404);
+  });
+
+  it('applies per-invoice tax overrides over settings and keeps the invariant', async () => {
+    const ctx = await sharedCtx();
+    // Settings default to 14% VAT / 3% discount. Override to 0% / 0% on the invoice.
+    const create = await req('/api/invoices', {
+      method: 'POST',
+      body: JSON.stringify({
+        guestName: 'عميل بدون ضريبة', vatRate: 0, discountRate: 0,
+        lines: [{ description: 'خدمة', qty: 1, unitPrice: 1000 }],
+      }),
+    }, ctx);
+    expect(create.status).toBe(201);
+    const { invoice } = await create.json() as { invoice: { id: string; vat_rate: number | null; discount_rate: number | null; tax_total: string; discount: string; total: string; subtotal_net: string; subtotal_gross: string } };
+    expect(invoice.vat_rate).toBe(0);
+    expect(invoice.discount_rate).toBe(0);
+    expect(Number(invoice.tax_total)).toBe(0);
+    expect(Number(invoice.discount)).toBe(0);
+    expect(Number(invoice.total)).toBe(Number(invoice.subtotal_gross));
+
+    await req(`/api/invoices/${invoice.id}/lock`, { method: 'POST' }, ctx);
+    const print = await req(`/api/invoices/${invoice.id}/print`, {}, ctx);
+    const body = await print.json() as { calc: { vatRate: number; discountRate: number }; issuer: { name: string; taxId: string } };
+    expect(body.calc.vatRate).toBe(0);
+    expect(body.calc.discountRate).toBe(0);
+    // No per-invoice issuer override → falls back to settings (name is the tenant name).
+    expect(body.issuer.name).toBe('فندق قاعود سبورتنج');
+  });
+
+  it('lets a per-invoice issuer override win in the print payload', async () => {
+    const ctx = await sharedCtx();
+    const create = await req('/api/invoices', {
+      method: 'POST',
+      body: JSON.stringify({
+        guestName: 'شركة', issuerName: 'فرع الميناء', issuerTaxId: '706904204', issuerAddress: 'الميناء',
+        lines: [{ description: 'خدمة', qty: 1, unitPrice: 500 }],
+      }),
+    }, ctx);
+    const { invoice } = await create.json() as { invoice: { id: string } };
+    await req(`/api/invoices/${invoice.id}/lock`, { method: 'POST' }, ctx);
+    const body = await (await req(`/api/invoices/${invoice.id}/print`, {}, ctx)).json() as { issuer: { name: string; taxId: string; address: string } };
+    expect(body.issuer.name).toBe('فرع الميناء');
+    expect(body.issuer.taxId).toBe('706904204');
+    expect(body.issuer.address).toBe('الميناء');
+  });
+
+  it('rejects a per-invoice issuer tax id that is not 9 digits', async () => {
+    const ctx = await sharedCtx();
+    const res = await req('/api/invoices', {
+      method: 'POST',
+      body: JSON.stringify({ guestName: 'x', issuerTaxId: '123', lines: [{ description: 'x', qty: 1, unitPrice: 100 }] }),
+    }, ctx);
+    expect(res.status).toBe(400);
+  });
+
+  it('persists branding settings (logo, signatures, footer)', async () => {
+    const ctx = await sharedCtx();
+    const put = await req('/api/settings', {
+      method: 'PUT',
+      body: JSON.stringify({
+        hotelName: 'فندق قاعود', hotelNameEn: 'KAOUD HOTEL', taxRegistrationNumber: '706904204',
+        commercialRegister: '135665', activityCode: '5510', address: 'سبورتنج', city: 'Alexandria',
+        phone: '', email: '', vatRate: 14, discountRate: 3, pricesIncludeTax: true, serialStart: 10246,
+        currency: 'EGP', logoData: 'data:image/png;base64,AAAA', signatureLeft: 'المدير المالي|Financial Controller',
+        signatureRight: 'مدير الائتمان|Credit Manager', footerNote: 'ملاحظة',
+      }),
+    }, ctx);
+    expect(put.status).toBe(200);
+    const body = await put.json() as { settings: { logo_data: string; signature_left: string; footer_note: string } };
+    expect(body.settings.logo_data).toBe('data:image/png;base64,AAAA');
+    expect(body.settings.signature_left).toBe('المدير المالي|Financial Controller');
+    expect(body.settings.footer_note).toBe('ملاحظة');
   });
 });

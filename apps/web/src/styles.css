@@ -108,16 +108,77 @@ td.num, th.num { text-align: left; font-variant-numeric: tabular-nums; direction
 .totals div { display: flex; justify-content: space-between; padding: 5px 0; }
 .totals .grand { border-top: 2px solid var(--text); margin-top: 6px; padding-top: 8px; font-weight: 700; font-size: 17px; }
 
-/* ---------- print ---------- */
-.print-area { display: none; }
+/* ---------- invoice (V13-style professional) ---------- */
+.print-area { display: block; padding: 16px 0; }
+.inv {
+  max-width: 860px; margin: 0 auto; background: #fff; color: #111;
+  border: 1px solid #111; border-radius: 12px; overflow: hidden;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, .06);
+  font-family: "Segoe UI", Tahoma, "Noto Naskh Arabic", sans-serif;
+}
+.inv-bar { height: 6px; background: linear-gradient(90deg, #0F2340 0%, #8A6D00 50%, #0F2340 100%); }
+.inv-cancel { background: #C00000; color: #fff; text-align: center; padding: 14px; font-size: 24px; font-weight: 900; letter-spacing: 2px; }
+.inv-cancel-note { background: #ffe6e6; color: #C00000; text-align: center; padding: 8px; font-weight: 800; }
+
+.inv-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 26px 32px 18px; }
+.inv-seller { font-size: 13px; line-height: 1.9; color: #111; }
+.inv-seller .inv-city { margin-top: 10px; font-weight: 800; font-size: 15px; }
+.inv-brand { text-align: center; flex: 1; }
+.inv-brand img { height: 84px; object-fit: contain; }
+.inv-name { font-size: 25px; font-weight: 900; color: #0F2340; margin-top: 2px; }
+.inv-name-en { font-size: 12px; letter-spacing: 3px; color: #8A6D00; font-weight: 800; }
+.inv-meta { text-align: left; }
+.inv-invoice-box { background: #0F2340; color: #fff; padding: 10px 16px; border-radius: 10px; text-align: center; }
+.inv-invoice-label { font-size: 12px; letter-spacing: 2px; }
+.inv-invoice-no { font-size: 23px; font-weight: 900; margin-top: 2px; }
+.inv-date { text-align: center; margin-top: 8px; font-size: 13px; }
+
+.inv-rule { height: 1px; background: #eee; margin: 0 32px; }
+
+.inv-cards { display: flex; gap: 16px; padding: 18px 32px; }
+.inv-billto { flex: 1; background: #EDE9D0; border: 1px solid #111; border-radius: 12px; padding: 14px 16px; }
+.inv-billto-label { font-size: 11px; letter-spacing: 2px; color: #8A6D00; font-weight: 800; }
+.inv-billto-name { font-size: 19px; font-weight: 900; margin-top: 4px; }
+.inv-billto-sub { font-size: 13px; margin-top: 2px; }
+.inv-total-box { width: 210px; background: #0F2340; color: #fff; border-radius: 12px; padding: 14px 16px; }
+.inv-total-label { font-size: 11px; letter-spacing: 2px; }
+.inv-total-date { font-size: 17px; font-weight: 800; margin-top: 4px; }
+.inv-total-amount { font-size: 23px; font-weight: 900; margin-top: 2px; }
+
+.inv-lines { width: calc(100% - 64px); margin: 0 32px; border-collapse: separate; border-spacing: 0; border: 2px solid #111; border-radius: 12px; overflow: hidden; }
+.inv-lines th { background: #0F2340; color: #fff; padding: 12px; font-size: 13px; }
+.inv-lines td { padding: 14px; border-bottom: 1px solid #111; font-size: 13px; vertical-align: top; }
+.inv-lines .c-desc { text-align: right; width: 58%; }
+.inv-lines .c-num { text-align: center; }
+.inv-line-desc { font-weight: 700; font-size: 14px; }
+.inv-line-sub { color: #222; font-size: 12.5px; margin-top: 4px; }
+
+.inv-summary-wrap { display: flex; justify-content: flex-end; padding: 14px 32px 0; }
+.inv-summary { width: 340px; background: #F5F3E6; border: 1px solid #111; border-radius: 12px; padding: 14px 16px; line-height: 2.1; font-size: 14px; }
+.inv-summary div { display: flex; justify-content: space-between; }
+.inv-summary .inv-grand { border-top: 1px dashed #ddd; margin-top: 6px; padding-top: 8px; font-size: 18px; }
+
+.inv-signs { display: flex; justify-content: space-between; padding: 34px 32px 10px; }
+.inv-sign { text-align: center; }
+.inv-sign-line { width: 220px; border-bottom: 1px solid #111; margin: 0 auto 8px; }
+.inv-sign-ar { font-weight: 800; }
+.inv-sign-en { font-size: 12px; color: #222; }
+
+.inv-foot { display: flex; align-items: center; gap: 20px; padding: 6px 32px 26px; }
+.inv-foot .qr { text-align: center; }
+.inv-foot .qr img { width: 120px; height: 120px; }
+.inv-qr-note { font-size: 11px; color: #333; }
+.inv-foot-text { flex: 1; font-size: 11px; color: #444; }
+.inv-foot-uuid { margin-top: 6px; }
+
 @media print {
   body { background: #fff; }
   .app, .no-print { display: none !important; }
   .print-area { display: block !important; padding: 0; }
-  @page { size: A4; margin: 12mm; }
-  .print-area table { font-size: 12px; }
-  .print-head { display: flex; justify-content: space-between; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 12px; }
-  .print-title { text-align: center; font-size: 20px; font-weight: 700; margin: 10px 0; }
-  .qr { text-align: center; margin-top: 10px; }
-  .qr img { width: 130px; height: 130px; }
+  @page { size: A4; margin: 10mm; }
+  .inv { max-width: none; border: 0; border-radius: 0; box-shadow: none; }
+  .inv-bar, .inv-cancel, .inv-cancel-note, .inv-invoice-box, .inv-total-box, .inv-billto, .inv-lines th {
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .inv, .inv * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }

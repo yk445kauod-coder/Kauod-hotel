@@ -79,3 +79,21 @@ describe('calcInvoice (tax-exclusive mode)', () => {
     expect(c.total).toBe('3762.00');
   });
 });
+
+describe('per-invoice tax overrides (engine level)', () => {
+  it('honours a 0% override and keeps net + tax - discount == total', () => {
+    const r = calcInvoice(input({ lines: [{ description: 'خدمة', qty: 1, unitPrice: '1000.00', kind: 'extra' }] }),
+      { vatRate: 0, discountRate: 0, pricesIncludeTax: true });
+    expect(r.taxTotal).toBe('0.00');
+    expect(r.discount).toBe('0.00');
+    expect(r.total).toBe('1000.00');
+  });
+
+  it('a 10% VAT override changes tax but preserves the invariant', () => {
+    const r = calcInvoice(input({ lines: [{ description: 'خدمة', qty: 1, unitPrice: '1100.00', kind: 'extra' }] }),
+      { vatRate: 10, discountRate: 0, pricesIncludeTax: true });
+    const lhs = parseMoney(r.subtotalNet) + parseMoney(r.taxTotal) - parseMoney(r.discount);
+    expect(lhs).toBe(parseMoney(r.total));
+    expect(r.taxTotal).toBe('100.00');
+  });
+});

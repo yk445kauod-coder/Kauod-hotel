@@ -17,17 +17,20 @@ export interface InvoiceLine {
 export interface InvoiceFull extends Omit<InvoiceSummary, 'created_at'> {
   uuid: string; receiver_tax_id: string; notes: string; eta_uuid: string | null;
   eta_submitted_at: string | null; eta_error: string | null;
+  vat_rate: number | null; discount_rate: number | null;
+  issuer_name: string | null; issuer_tax_id: string | null; issuer_address: string | null;
 }
 
 export interface Settings {
   hotel_name: string; hotel_name_en: string; tax_registration_number: string; commercial_register: string;
   activity_code: string; address: string; city: string; phone: string; email: string;
   vat_rate: number; discount_rate: number; prices_include_tax: number; serial_start: number; currency: string;
+  logo_data: string; signature_left: string; signature_right: string; footer_note: string;
 }
 
 export interface CalcResult {
   nights: number; subtotalGross: string; subtotalNet: string; taxTotal: string;
-  discount: string; total: string;
+  discount: string; total: string; vatRate: number; discountRate: number;
   lines: { description: string; qty: number; unitPrice: string; gross: string; net: string; tax: string }[];
 }
 

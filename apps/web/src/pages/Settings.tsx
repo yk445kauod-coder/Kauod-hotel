@@ -19,9 +19,22 @@ export function SettingsPage({ user, onSaved }: { user: SessionUser; onSaved: ()
         commercialRegister: s.commercial_register, activityCode: s.activity_code, address: s.address, city: s.city,
         phone: s.phone, email: s.email, vatRate: Number(s.vat_rate), discountRate: Number(s.discount_rate),
         pricesIncludeTax: s.prices_include_tax === 1, serialStart: Number(s.serial_start), currency: s.currency,
+        logoData: s.logo_data, signatureLeft: s.signature_left, signatureRight: s.signature_right, footerNote: s.footer_note,
       });
       setMsg('تم الحفظ'); onSaved();
     } catch (e) { setErr(`تعذّر الحفظ (${(e as ApiError).code})`); }
+  }
+
+  async function onLogo(file: File | undefined) {
+    if (!file) return;
+    setErr('');
+    if (!/^image\/(png|jpe?g|webp|svg\+xml)$/.test(file.type)) { setErr('صيغة اللوجو غير مدعومة (PNG / JPG / WebP / SVG)'); return; }
+    if (file.size > 200_000) { setErr('حجم اللوجو كبير — الحد الأقصى 200 كيلوبايت'); return; }
+    const data = await new Promise<string>((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(String(r.result)); r.onerror = rej; r.readAsDataURL(file);
+    });
+    upd('logo_data', data);
   }
 
   if (!s) return <div className="muted">جارٍ التحميل…</div>;
@@ -44,6 +57,36 @@ export function SettingsPage({ user, onSaved }: { user: SessionUser; onSaved: ()
           <label className="field">العنوان<input value={s.address} disabled={!canEdit} onChange={(e) => upd('address', e.target.value)} /></label>
           <label className="field">الهاتف<input dir="ltr" value={s.phone} disabled={!canEdit} onChange={(e) => upd('phone', e.target.value)} /></label>
           <label className="field">البريد الإلكتروني<input dir="ltr" value={s.email} disabled={!canEdit} onChange={(e) => upd('email', e.target.value)} /></label>
+        </div>
+      </div>
+
+      <div className="card">
+        <h3>اللوجو والتوقيعات (تظهر على الفاتورة المطبوعة)</h3>
+        <div className="grid cols-2">
+          <div className="field">
+            <span>لوجو الفندق</span>
+            <div className="row" style={{ gap: 12, alignItems: 'center' }}>
+              {s.logo_data
+                ? <img src={s.logo_data} alt="logo" style={{ height: 64, maxWidth: 160, objectFit: 'contain', background: '#fff', border: '1px solid var(--border)', borderRadius: 8, padding: 4 }} />
+                : <span className="muted">لا يوجد لوجو</span>}
+              {canEdit && (
+                <div className="row" style={{ gap: 8 }}>
+                  <label className="btn ghost" style={{ cursor: 'pointer' }}>
+                    اختيار صورة
+                    <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden onChange={(e) => onLogo(e.target.files?.[0])} />
+                  </label>
+                  {s.logo_data && <button className="btn ghost" onClick={() => upd('logo_data', '')}>حذف</button>}
+                </div>
+              )}
+            </div>
+            <span className="muted" style={{ fontSize: 12 }}>PNG / JPG / WebP / SVG — حتى 200 كيلوبايت. يُحفظ داخل قاعدة البيانات.</span>
+          </div>
+          <div className="field">
+            <span>النص أسفل الفاتورة</span>
+            <textarea rows={3} value={s.footer_note} disabled={!canEdit} onChange={(e) => upd('footer_note', e.target.value)} />
+          </div>
+          <label className="field">اسم التوقيع (يسار)<input value={s.signature_left} disabled={!canEdit} onChange={(e) => upd('signature_left', e.target.value)} placeholder="المدير المالي|Financial Controller" /></label>
+          <label className="field">اسم التوقيع (يمين)<input value={s.signature_right} disabled={!canEdit} onChange={(e) => upd('signature_right', e.target.value)} placeholder="مدير الائتمان|Credit Manager" /></label>
         </div>
       </div>
 
