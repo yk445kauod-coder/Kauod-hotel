@@ -6,9 +6,10 @@ import { calcInvoice } from '@kaoud/core';
 import { api } from './api';
 
 const DB_NAME = 'kaoud-offline';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const KV = 'kv';
 const QUEUE = 'queue';
+const OUTBOX = 'outbox';
 
 export interface SerialBlock { start: number; end: number; next: number; }
 export interface QueuedInvoice {
@@ -25,6 +26,7 @@ function openDb(): Promise<IDBDatabase> {
       const db = req.result;
       if (!db.objectStoreNames.contains(KV)) db.createObjectStore(KV);
       if (!db.objectStoreNames.contains(QUEUE)) db.createObjectStore(QUEUE, { keyPath: 'opId' });
+      if (!db.objectStoreNames.contains(OUTBOX)) db.createObjectStore(OUTBOX, { keyPath: 'opKey' });
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -40,6 +42,10 @@ async function tx<T>(store: string, mode: IDBTransactionMode, fn: (s: IDBObjectS
     req.onerror = () => reject(req.error);
   });
 }
+
+// Exposed for the outbox module so all offline stores share one connection.
+export const idbTx = tx;
+export const OUTBOX_STORE = OUTBOX;
 
 const kvGet = <T>(k: string) => tx<T>(KV, 'readonly', (s) => s.get(k));
 const kvSet = (k: string, v: unknown) => tx(KV, 'readwrite', (s) => s.put(v, k));
