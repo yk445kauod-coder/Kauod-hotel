@@ -12,8 +12,7 @@ APP_ORIGIN_EXTRA = ""
 [[d1_databases]]
 binding = "DB"
 database_name = "kaoud_hotel"
-# Replaced by scripts/setup.sh after `wrangler d1 create`.
-database_id = "PLACEHOLDER"
+database_id = "97127178-19ac-4cbf-a52e-30d20538b680"
 
 [observability]
 enabled = true

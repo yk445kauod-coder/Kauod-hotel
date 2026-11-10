@@ -1,7 +1,8 @@
 // Password hashing (PBKDF2-SHA256 via WebCrypto) and random token helpers.
 // Never store a password in plaintext; the API only ever persists a hash.
 
-const PBKDF2_ITERATIONS = 150_000;
+// Cloudflare Workers' WebCrypto rejects PBKDF2 iteration counts above 100,000.
+const PBKDF2_ITERATIONS = 100_000;
 const KEY_LEN = 32;
 
 function toHex(buf: ArrayBuffer): string {
