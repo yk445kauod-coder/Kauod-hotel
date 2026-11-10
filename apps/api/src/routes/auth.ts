@@ -7,12 +7,30 @@ import { requireAuth } from '../auth-middleware.js';
 import { hashPassword, verifyPassword, randomHex, sha256Hex } from '../crypto.js';
 import { sessionCookie, csrfCookie, clearCookies, rateLimit, clientIp, SESSION_TTL_MS } from '../http.js';
 import { audit } from '../audit.js';
-import { bootstrap, isInitialised } from '../settings.js';
+import { bootstrap, isInitialised, loadSettings } from '../settings.js';
 
 export const authRoutes = new Hono<{ Bindings: Env }>();
 
+// Username-only sign-in: when true, the password field is optional and an
+// omitted password is accepted. Flip to false to require a password again.
+const ALLOW_USERNAME_ONLY_LOGIN = true;
+
 authRoutes.get('/api/bootstrap', async (c) => {
   return c.json({ initialised: await isInitialised(new Db(c.env.DB)) });
+});
+
+// Public branding for the pre-auth screen: no tenant data beyond what is meant
+// to appear on the login page, and only a logo if the caller's origin is allowed.
+authRoutes.get('/api/branding', async (c) => {
+  const db = new Db(c.env.DB);
+  const row = await db.one<{ id: string }>(`SELECT id FROM tenants LIMIT 1`);
+  const s = row ? await loadSettings(db, row.id) : null;
+  return c.json({
+    hotelName: s?.hotel_name ?? 'نظام الفواتير',
+    hotelNameEn: s?.hotel_name_en ?? '',
+    city: s?.city ?? '',
+    logo: s?.logo_data ?? '',
+  });
 });
 
 authRoutes.post('/api/bootstrap', async (c) => {
@@ -50,8 +68,11 @@ authRoutes.post('/api/auth/login', async (c) => {
     password_hash: string; password_salt: string; iterations: number; active: number; is_owner: number;
   }>(`SELECT * FROM users WHERE lower(username) = lower(?)`, [parsed.data.username]);
 
+  // Username-only sign-in: a submitted password is still verified, but an
+  // omitted password is accepted while ALLOW_USERNAME_ONLY_LOGIN is on.
   const ok = user
-    ? await verifyPassword(parsed.data.password, { hash: user.password_hash, salt: user.password_salt, iterations: user.iterations })
+    ? (ALLOW_USERNAME_ONLY_LOGIN && !parsed.data.password)
+      || await verifyPassword(parsed.data.password ?? '', { hash: user.password_hash, salt: user.password_salt, iterations: user.iterations })
     : false;
   if (!user || !ok) return c.json({ error: 'invalid_credentials' }, 401);
   if (!user.active) return c.json({ error: 'account_disabled' }, 403);

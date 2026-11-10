@@ -13,6 +13,7 @@ import { DirectoryPage } from './pages/Directory';
 import { AuditPage } from './pages/Audit';
 import { EtaPage } from './pages/Eta';
 import { ROLE_LABEL } from './format';
+import { useTheme } from './theme';
 
 type Tab = 'dashboard' | 'invoices' | 'reports' | 'directory' | 'serial' | 'eta' | 'users' | 'settings' | 'audit';
 
@@ -35,6 +36,7 @@ export function App() {
   const [tab, setTab] = useState<Tab>('dashboard');
   const [printId, setPrintId] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const { theme, toggle: toggleTheme } = useTheme();
 
   const loadSettings = useCallback(async () => {
     try { setSettings((await api.get<{ settings: Settings }>('/api/settings')).settings); }
@@ -67,11 +69,17 @@ export function App() {
   }
 
   const nav = NAV.filter((n) => !n.roles || n.roles.includes(user.role));
+  const hotelName = settings?.hotel_name ?? 'فندق قاعود سبورتنج';
 
   return (
     <div className="app">
       <aside className="sidebar no-print">
-        <h1>فندق قاعود سبورتنج</h1>
+        <h1>
+          {settings?.logo_data
+            ? <img className="logo" src={settings.logo_data} alt={hotelName} />
+            : <span className="logo-ph">{hotelName.trim().charAt(0) || 'ق'}</span>}
+          <span>{hotelName}</span>
+        </h1>
         <div className="hotel">نظام الفواتير والضرائب</div>
         {nav.map((n) => (
           <button key={n.id} className={`navbtn ${tab === n.id ? 'active' : ''}`} onClick={() => setTab(n.id)}>
@@ -80,8 +88,8 @@ export function App() {
         ))}
         <div className="spacer" />
         <div className="who">
-          <div>{user.name}</div>
-          <div>{ROLE_LABEL[user.role] ?? user.role}</div>
+          <b>{user.name}</b>
+          <span>{ROLE_LABEL[user.role] ?? user.role}</span>
         </div>
         <button className="navbtn" onClick={onLogout}><span className="ico">⎋</span><span>خروج</span></button>
       </aside>
@@ -89,7 +97,18 @@ export function App() {
       <main className="main">
         <header className="topbar no-print">
           <h2>{nav.find((n) => n.id === tab)?.label}</h2>
-          <div className="muted">{settings?.hotel_name ?? ''}</div>
+          <div className="row" style={{ gap: 10 }}>
+            <span className="muted">{settings?.hotel_name ?? ''}</span>
+            <button
+              className="btn ghost"
+              onClick={toggleTheme}
+              title={theme === 'dark' ? 'الوضع الفاتح' : 'الوضع الداكن'}
+              aria-label={theme === 'dark' ? 'الوضع الفاتح' : 'الوضع الداكن'}
+              style={{ padding: '7px 10px', fontSize: 16 }}
+            >
+              {theme === 'dark' ? '☀️' : '🌙'}
+            </button>
+          </div>
         </header>
         <div className="content no-print">
           {error && <div className="alert err">{error}</div>}

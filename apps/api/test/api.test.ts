@@ -90,9 +90,15 @@ async function login(username: string, password: string): Promise<Ctx> {
 }
 
 async function bootstrapAndLogin(): Promise<Ctx> {
-  await req('/api/bootstrap', { method: 'POST', body: JSON.stringify({ tenantName: 'فندق قاعود', username: 'owner', name: 'المالك', password: 'Owner@2026x' }) });
-  return login('owner', 'Owner@2026x');
+  if (!bootstrapPromise) {
+    bootstrapPromise = (async () => {
+      await req('/api/bootstrap', { method: 'POST', body: JSON.stringify({ tenantName: 'فندق قاعود', username: 'owner', name: 'المالك', password: 'Owner@2026x' }) });
+      return login('owner', 'Owner@2026x');
+    })();
+  }
+  return bootstrapPromise;
 }
+let bootstrapPromise: Promise<Ctx> | null = null;
 // (bootstrap is idempotent-safe here: a repeat returns 409 and we ignore it)
 
 // Login is rate-limited (10 per 5 min per IP), so reuse one session for the
@@ -131,9 +137,25 @@ describe('API integration', () => {
     expect(good.headers.get('set-cookie')).toMatch(/HttpOnly/i);
   });
 
+  it('allows username-only sign-in (no password field)', async () => {
+    await bootstrapAndLogin();
+    const res = await req('/api/auth/login', { method: 'POST', body: JSON.stringify({ username: 'owner' }) });
+    expect(res.status).toBe(200);
+    const body = await res.json() as { user: { username: string } };
+    expect(body.user.username).toBe('owner');
+  });
+
   it('requires auth for protected routes', async () => {
     const res = await req('/api/invoices');
     expect(res.status).toBe(401);
+  });
+
+  it('exposes public branding without auth', async () => {
+    const res = await req('/api/branding');
+    expect(res.status).toBe(200);
+    const body = await res.json() as { hotelName: string; logo: string };
+    expect(typeof body.hotelName).toBe('string');
+    expect(body.hotelName.length).toBeGreaterThan(0);
   });
 
   it('requires CSRF on mutations', async () => {

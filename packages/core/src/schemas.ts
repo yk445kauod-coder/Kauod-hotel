@@ -38,7 +38,7 @@ export const InvoiceInputSchema = z.object({
 
 export const LoginSchema = z.object({
   username: z.string().trim().min(1).max(100),
-  password: z.string().min(1).max(200),
+  password: z.string().min(1).max(200).optional(),
 });
 
 export const CreateUserSchema = z.object({
