@@ -11,18 +11,16 @@ import { SerialPage } from './pages/Serial';
 import { ReportsPage } from './pages/Reports';
 import { DirectoryPage } from './pages/Directory';
 import { AuditPage } from './pages/Audit';
-import { EtaPage } from './pages/Eta';
 import { ROLE_LABEL } from './format';
 import { useTheme } from './theme';
 
-type Tab = 'dashboard' | 'invoices' | 'reports' | 'directory' | 'serial' | 'eta' | 'users' | 'settings' | 'audit';
+type Tab = 'dashboard' | 'invoices' | 'reports' | 'directory' | 'serial' | 'users' | 'settings' | 'audit';
 
 const NAV: { id: Tab; label: string; ico: string; roles?: SessionUser['role'][] }[] = [
   { id: 'dashboard', label: 'لوحة التحكم', ico: '▤' },
   { id: 'invoices', label: 'الفواتير', ico: '🧾' },
   { id: 'reports', label: 'التقارير', ico: '📊' },
   { id: 'directory', label: 'الغرف والنزلاء', ico: '🏨' },
-  { id: 'eta', label: 'مصلحة الضرائب', ico: '🇪🇬', roles: ['admin', 'manager', 'accountant'] },
   { id: 'serial', label: 'أرقام الفواتير', ico: '#️⃣', roles: ['admin', 'manager'] },
   { id: 'users', label: 'المستخدمون', ico: '👥', roles: ['admin', 'manager'] },
   { id: 'settings', label: 'الإعدادات', ico: '⚙️', roles: ['admin', 'manager'] },
@@ -140,7 +138,6 @@ export function App() {
           {tab === 'invoices' && <Invoices user={user} settings={settings} onPrint={(id) => setPrintId(id)} />}
           {tab === 'reports' && <ReportsPage />}
           {tab === 'directory' && <DirectoryPage user={user} />}
-          {tab === 'eta' && <EtaPage />}
           {tab === 'serial' && <SerialPage user={user} />}
           {tab === 'users' && <UsersPage user={user} />}
           {tab === 'settings' && <SettingsPage user={user} onSaved={loadSettings} />}
