@@ -1,0 +1,22 @@
+{
+  "name": "@kaoud/api",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev --port 8787 --local",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc -p tsconfig.json",
+    "migrate:local": "wrangler d1 migrations apply kaoud_hotel --local",
+    "migrate:remote": "wrangler d1 migrations apply kaoud_hotel --remote"
+  },
+  "dependencies": {
+    "@kaoud/core": "*",
+    "hono": "^4.6.14",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241127.0",
+    "wrangler": "^3.90.0"
+  }
+}

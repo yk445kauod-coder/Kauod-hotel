@@ -1,0 +1,123 @@
+import { calcInvoice, parseMoney, formatMoney, uuidv4, type InvoiceInput, type CalcResult } from '@kaoud/core';
+import { Db } from './db.js';
+import { newId } from './audit.js';
+import { loadSettings, loadCounter, type Settings } from './settings.js';
+import { etaDateTime } from '@kaoud/core';
+
+export interface InvoiceRecord {
+  id: string;
+  tenant_id: string;
+  serial: number;
+  uuid: string;
+  guest_id: string | null;
+  guest_name: string;
+  receiver_tax_id: string;
+  room_number: string;
+  check_in: string | null;
+  check_out: string | null;
+  status: string;
+  issued_at: string;
+  subtotal_net: string;
+  subtotal_gross: string;
+  tax_total: string;
+  discount: string;
+  total: string;
+  notes: string;
+  eta_uuid: string | null;
+  eta_status: string;
+  eta_submitted_at: string | null;
+  eta_error: string | null;
+  created_at: string;
+  updated_at: string;
+  locked_at: string | null;
+  cancelled_at: string | null;
+}
+
+export function taxConfigFromSettings(s: Settings) {
+  return {
+    vatRate: s.vat_rate,
+    discountRate: s.discount_rate,
+    pricesIncludeTax: !!s.prices_include_tax,
+  };
+}
+
+export interface CreateInvoiceInput extends InvoiceInput {
+  guestId?: string;
+  reservationId?: string;
+  receiverTaxId?: string;
+}
+
+// Allocates the next serial atomically, computes totals with the shared engine,
+// and writes the invoice + its lines. The counter is advanced only on success.
+export async function createInvoice(
+  db: Db, tenantId: string, userId: string, input: CreateInvoiceInput,
+): Promise<{ id: string; serial: number; calc: CalcResult }> {
+  const settings = await loadSettings(db, tenantId);
+  if (!settings) throw new Error('settings_missing');
+  const counter = await loadCounter(db, tenantId);
+  if (!counter) throw new Error('counter_missing');
+
+  const serial = counter.next_override && counter.next_override > 0 ? counter.next_override : counter.next_serial;
+  const calc = calcInvoice(input, taxConfigFromSettings(settings));
+  const id = newId('inv');
+  const now = new Date().toISOString();
+  const uuid = uuidv4();
+
+  const statements: Array<{ sql: string; params: unknown[] }> = [
+    {
+      sql: `INSERT INTO invoices
+        (id, tenant_id, serial, uuid, guest_id, guest_name, receiver_tax_id, room_number, check_in, check_out,
+         status, issued_at, subtotal_net, subtotal_gross, tax_total, discount, total, notes,
+         eta_uuid, eta_status, created_by, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?, ?, ?, ?, ?, 'unconfigured', ?, ?, ?)`,
+      params: [
+        id, tenantId, serial, uuid, input.guestId ?? null, input.guestName, input.receiverTaxId ?? '',
+        input.roomNumber ?? '', input.checkIn ?? null, input.checkOut ?? null,
+        etaDateTime(), calc.subtotalNet, calc.subtotalGross, calc.taxTotal, calc.discount, calc.total,
+        input.notes ?? '', uuid, userId, now, now,
+      ],
+    },
+  ];
+
+  calc.lines.forEach((l, idx) => {
+    statements.push({
+      sql: `INSERT INTO invoice_lines (id, invoice_id, tenant_id, description, qty, unit_price, kind, gross, net, tax, position)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      params: [newId('ln'), id, tenantId, l.description, l.qty, l.unitPrice, input.lines[idx].kind ?? 'extra', l.gross, l.net, l.tax, idx],
+    });
+  });
+
+  // Advance the counter; clear a one-shot override.
+  statements.push({
+    sql: `UPDATE counters SET next_serial = ?, next_override = NULL WHERE tenant_id = ?`,
+    params: [serial + 1, tenantId],
+  });
+
+  await db.batch(statements);
+  return { id, serial, calc };
+}
+
+export async function getInvoice(db: Db, tenantId: string, id: string): Promise<InvoiceRecord | null> {
+  return db.one<InvoiceRecord>(`SELECT * FROM invoices WHERE id = ? AND tenant_id = ?`, [id, tenantId]);
+}
+
+export async function getInvoiceBySerial(db: Db, tenantId: string, serial: number): Promise<InvoiceRecord | null> {
+  return db.one<InvoiceRecord>(`SELECT * FROM invoices WHERE serial = ? AND tenant_id = ?`, [serial, tenantId]);
+}
+
+export interface InvoiceLineRecord {
+  id: string; description: string; qty: number; unit_price: string; kind: string;
+  gross: string; net: string; tax: string; position: number;
+}
+export async function getInvoiceLines(db: Db, tenantId: string, invoiceId: string): Promise<InvoiceLineRecord[]> {
+  return db.all<InvoiceLineRecord>(
+    `SELECT id, description, qty, unit_price, kind, gross, net, tax, position
+       FROM invoice_lines WHERE invoice_id = ? AND tenant_id = ? ORDER BY position`,
+    [invoiceId, tenantId],
+  );
+}
+
+export async function paidTotal(db: Db, tenantId: string, invoiceId: string): Promise<string> {
+  const rows = await db.all<{ amount: string }>(`SELECT amount FROM payments WHERE invoice_id = ? AND tenant_id = ?`, [invoiceId, tenantId]);
+  return formatMoney(rows.reduce((s, r) => s + parseMoney(r.amount), 0));
+}

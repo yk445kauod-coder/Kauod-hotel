@@ -1,0 +1,87 @@
+import { Hono } from 'hono';
+import type { Env } from '../db.js';
+import { requireAuth, requireRole } from '../auth-middleware.js';
+
+export const reportRoutes = new Hono<{ Bindings: Env }>();
+
+// Dashboard summary — excludes cancelled invoices from all money totals.
+reportRoutes.get('/api/reports/summary', requireAuth(), async (c) => {
+  const db = c.get('db');
+  const tenantId = c.get('auth').user.tenantId;
+  const row = await db.one<{
+    count: number; valid: number; cancelled: number; last_serial: number | null;
+    total: number; tax: number; discount: number; net: number;
+  }>(
+    `SELECT
+       COUNT(*) AS count,
+       SUM(CASE WHEN status != 'cancelled' THEN 1 ELSE 0 END) AS valid,
+       SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled,
+       MAX(serial) AS last_serial,
+       COALESCE(SUM(CASE WHEN status != 'cancelled' THEN CAST(total AS REAL) ELSE 0 END), 0) AS total,
+       COALESCE(SUM(CASE WHEN status != 'cancelled' THEN CAST(tax_total AS REAL) ELSE 0 END), 0) AS tax,
+       COALESCE(SUM(CASE WHEN status != 'cancelled' THEN CAST(discount AS REAL) ELSE 0 END), 0) AS discount,
+       COALESCE(SUM(CASE WHEN status != 'cancelled' THEN CAST(subtotal_net AS REAL) ELSE 0 END), 0) AS net
+     FROM invoices WHERE tenant_id = ?`,
+    [tenantId]);
+  const paidRow = await db.one<{ paid: number }>(
+    `SELECT COALESCE(SUM(CAST(p.amount AS REAL)), 0) AS paid
+       FROM payments p JOIN invoices i ON i.id = p.invoice_id
+      WHERE p.tenant_id = ? AND i.status != 'cancelled'`,
+    [tenantId]);
+  return c.json({
+    count: row?.count ?? 0,
+    valid: row?.valid ?? 0,
+    cancelled: row?.cancelled ?? 0,
+    lastSerial: row?.last_serial ?? null,
+    total: Number(row?.total ?? 0).toFixed(2),
+    tax: Number(row?.tax ?? 0).toFixed(2),
+    discount: Number(row?.discount ?? 0).toFixed(2),
+    net: Number(row?.net ?? 0).toFixed(2),
+    paid: Number(paidRow?.paid ?? 0).toFixed(2),
+    outstanding: (Number(row?.total ?? 0) - Number(paidRow?.paid ?? 0)).toFixed(2),
+  });
+});
+
+// Revenue grouped by day or month over a range.
+reportRoutes.get('/api/reports/revenue', requireAuth(), requireRole('admin', 'manager', 'accountant'), async (c) => {
+  const db = c.get('db');
+  const tenantId = c.get('auth').user.tenantId;
+  const group = c.req.query('group') === 'month' ? 'month' : 'day';
+  const from = c.req.query('from') ?? '0000-01-01';
+  const to = c.req.query('to') ?? '9999-12-31';
+  const expr = group === 'month' ? "substr(issued_at, 1, 7)" : "substr(issued_at, 1, 10)";
+  const rows = await db.all(
+    `SELECT ${expr} AS bucket,
+            COUNT(*) AS invoices,
+            COALESCE(SUM(CAST(total AS REAL)), 0) AS total,
+            COALESCE(SUM(CAST(tax_total AS REAL)), 0) AS tax
+       FROM invoices
+      WHERE tenant_id = ? AND status != 'cancelled' AND issued_at >= ? AND issued_at <= ?
+      GROUP BY bucket ORDER BY bucket`,
+    [tenantId, from, to + '\uffff']);
+  return c.json({ group, rows: rows.map((r: Record<string, unknown>) => ({ ...r, total: Number(r.total).toFixed(2), tax: Number(r.tax).toFixed(2) })) });
+});
+
+// VAT return figures for a period (for the accountant / ETA filing).
+reportRoutes.get('/api/reports/vat', requireAuth(), requireRole('admin', 'manager', 'accountant'), async (c) => {
+  const db = c.get('db');
+  const tenantId = c.get('auth').user.tenantId;
+  const from = c.req.query('from') ?? '0000-01-01';
+  const to = c.req.query('to') ?? '9999-12-31';
+  const row = await db.one<{ net: number; tax: number; gross: number; discount: number; count: number }>(
+    `SELECT COALESCE(SUM(CAST(subtotal_net AS REAL)), 0) AS net,
+            COALESCE(SUM(CAST(tax_total AS REAL)), 0) AS tax,
+            COALESCE(SUM(CAST(subtotal_gross AS REAL)), 0) AS gross,
+            COALESCE(SUM(CAST(discount AS REAL)), 0) AS discount,
+            COUNT(*) AS count
+       FROM invoices WHERE tenant_id = ? AND status != 'cancelled' AND issued_at >= ? AND issued_at <= ?`,
+    [tenantId, from, to + '\uffff']);
+  return c.json({
+    period: { from, to },
+    invoiceCount: row?.count ?? 0,
+    netSales: (row?.net ?? 0).toFixed(2),
+    vatCollected: (row?.tax ?? 0).toFixed(2),
+    grossSales: (row?.gross ?? 0).toFixed(2),
+    discounts: (row?.discount ?? 0).toFixed(2),
+  });
+});
