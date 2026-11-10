@@ -65,19 +65,21 @@ afterAll(async () => { await mf?.dispose(); });
 interface Ctx { cookie: string; csrf: string; }
 
 async function req(path: string, init: RequestInit = {}, ctx?: Ctx): Promise<Response> {
-  const headers = new Headers(init.headers);
-  headers.set('Origin', 'http://localhost:5173');
-  if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
+  const headers: Record<string, string> = { Origin: 'http://localhost:5173' };
+  if (init.body) headers['Content-Type'] = 'application/json';
   if (ctx) {
-    headers.set('Cookie', ctx.cookie);
-    if (init.method && init.method !== 'GET') headers.set('X-CSRF-Token', ctx.csrf);
+    headers['Cookie'] = ctx.cookie;
+    if (init.method && init.method !== 'GET') headers['X-CSRF-Token'] = ctx.csrf;
   }
-  return mf.dispatchFetch(`${base}${path}`, { ...init, headers });
+  // Miniflare ships its own (undici-based) Request/Response types that clash
+  // with the DOM lib, so cast at the boundary and expose the DOM Response.
+  const res = await mf.dispatchFetch(`${base}${path}`, { ...init, headers } as never);
+  return res as unknown as Response;
 }
 
 function setCookieOf(res: Response): string {
-  // @ts-expect-error getSetCookie exists at runtime
-  const all: string[] = res.headers.getSetCookie ? res.headers.getSetCookie() : [res.headers.get('set-cookie') ?? ''];
+  const h = res.headers as unknown as { getSetCookie?: () => string[] };
+  const all: string[] = h.getSetCookie ? h.getSetCookie() : [res.headers.get('set-cookie') ?? ''];
   return all.map((c) => c.split(';')[0]).join('; ');
 }
 
