@@ -1,0 +1,23 @@
+{
+  "name": "kaoud-hotel",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "workspaces": ["packages/*", "apps/*"],
+  "scripts": {
+    "typecheck": "npm run typecheck -w @kaoud/core && npm run typecheck -w @kaoud/api && npm run typecheck -w @kaoud/web",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build:web": "npm run build -w @kaoud/web",
+    "dev:api": "npm run dev -w @kaoud/api",
+    "dev:web": "npm run dev -w @kaoud/web",
+    "migrate:local": "npm run migrate:local -w @kaoud/api",
+    "migrate:remote": "npm run migrate:remote -w @kaoud/api",
+    "deploy:api": "npm run deploy -w @kaoud/api",
+    "deploy:web": "npm run deploy -w @kaoud/web"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  }
+}
