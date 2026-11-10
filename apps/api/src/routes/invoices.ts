@@ -35,6 +35,13 @@ invoiceRoutes.get('/api/invoices', requireAuth(), async (c) => {
   const params: unknown[] = [tenantId];
   if (status) { where.push('status = ?'); params.push(status); }
   if (q) { where.push('(guest_name LIKE ? OR room_number LIKE ? OR CAST(serial AS TEXT) LIKE ?)'); params.push(`%${q}%`, `%${q}%`, `%${q}%`); }
+  // Field-specific filters for the register search (serial / date / guest / room).
+  const serial = c.req.query('serial')?.trim() ?? '';
+  const guest = c.req.query('guest')?.trim() ?? '';
+  const room = c.req.query('room')?.trim() ?? '';
+  if (serial) { where.push('CAST(serial AS TEXT) LIKE ?'); params.push(`%${serial}%`); }
+  if (guest) { where.push('guest_name LIKE ?'); params.push(`%${guest}%`); }
+  if (room) { where.push('room_number LIKE ?'); params.push(`%${room}%`); }
   if (from) { where.push('issued_at >= ?'); params.push(from); }
   if (to) { where.push('issued_at <= ?'); params.push(to + '\uffff'); }
 

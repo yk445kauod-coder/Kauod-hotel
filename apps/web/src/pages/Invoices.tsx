@@ -1,22 +1,36 @@
 import { useEffect, useState, useCallback } from 'react';
 import { api, ApiError } from '../api';
+import { exportExcel, openPrintWindow } from '../exports';
+import { queueInvoice, listQueue, syncNow, type QueuedInvoice } from '../offline';
 import type { SessionUser, Settings, InvoiceSummary, InvoiceFull, InvoiceLine } from '../types';
-import { egp, d, dt, STATUS_LABEL, ETA_LABEL, PAY_LABEL, today, addDays, nightsBetween } from '../format';
+import { egp, egpEn, d, dt, STATUS_LABEL, ETA_LABEL, PAY_LABEL, today, addDays, nightsBetween } from '../format';
 import { calcInvoice } from '@kaoud/core';
 
 interface DraftLine { description: string; qty: number; unitPrice: string; kind: string; }
 
 const KIND_LABEL: Record<string, string> = { room: 'إقامة', restaurant: 'مطعم', minibar: 'ميني بار', laundry: 'مغسلة', other: 'أخرى', extra: 'إضافي' };
 
-export function Invoices({ user, settings, onPrint, openNewSignal = 0 }: { user: SessionUser; settings: Settings | null; onPrint: (id: string) => void; openNewSignal?: number }) {
+export function Invoices({ user, settings, onPrint, openNewSignal = 0, offline = false, online = true, onQueued }: {
+  user: SessionUser; settings: Settings | null; onPrint: (id: string) => void;
+  openNewSignal?: number; offline?: boolean; online?: boolean; onQueued?: () => void;
+}) {
   const canWrite = ['admin', 'manager', 'reception'].includes(user.role);
   const [list, setList] = useState<InvoiceSummary[]>([]);
   const [total, setTotal] = useState(0);
   const [q, setQ] = useState('');
+  const [fNum, setFNum] = useState('');
+  const [fDate, setFDate] = useState('');
+  const [fGuest, setFGuest] = useState('');
+  const [fRoom, setFRoom] = useState('');
+  const [fFrom, setFFrom] = useState('');
+  const [fTo, setFTo] = useState('');
   const [status, setStatus] = useState('');
   const [offset, setOffset] = useState(0);
   const limit = 25;
   const [err, setErr] = useState('');
+  const [info, setInfo] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [queue, setQueue] = useState<QueuedInvoice[]>([]);
   const [editing, setEditing] = useState<null | { id?: string; draft: DraftState }>(null);
 
   const load = useCallback(async () => {
@@ -24,13 +38,21 @@ export function Invoices({ user, settings, onPrint, openNewSignal = 0 }: { user:
     try {
       const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
       if (q) params.set('q', q);
+      if (fNum) params.set('serial', fNum);
+      if (fFrom) params.set('from', fFrom); else if (fDate) params.set('from', fDate);
+      if (fTo) params.set('to', fTo); else if (fDate) params.set('to', fDate);
+      if (fGuest) params.set('guest', fGuest);
+      if (fRoom) params.set('room', fRoom);
       if (status) params.set('status', status);
       const r = await api.get<{ invoices: InvoiceSummary[]; total: number }>(`/api/invoices?${params}`);
       setList(r.invoices); setTotal(r.total);
-    } catch { setErr('تعذّر تحميل الفواتير'); }
-  }, [q, status, offset]);
+    } catch { if (online) setErr('تعذّر تحميل الفواتير'); }
+  }, [q, fNum, fDate, fGuest, fRoom, fFrom, fTo, status, offset, online]);
+
+  const refreshQueue = useCallback(async () => { try { setQueue(await listQueue()); } catch { /* ignore */ } }, []);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { refreshQueue(); }, [refreshQueue]);
 
   // Open the "new invoice" editor when the shell bumps the signal (FAB / hero button).
   useEffect(() => {
@@ -38,24 +60,137 @@ export function Invoices({ user, settings, onPrint, openNewSignal = 0 }: { user:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openNewSignal]);
 
+  async function flushQueue() {
+    setBusy(true);
+    try { await syncNow(); await refreshQueue(); await load(); onQueued?.(); }
+    finally { setBusy(false); }
+  }
+
+  function clearSearch() {
+    setQ(''); setFNum(''); setFDate(''); setFGuest(''); setFRoom(''); setFFrom(''); setFTo(''); setStatus(''); setOffset(0); setInfo('');
+  }
+
+  async function searchByNumber() {
+    const v = fNum.trim();
+    if (!v) { setErr('اكتب رقم الفاتورة الأول'); return; }
+    setErr(''); setInfo(''); setBusy(true);
+    try {
+      const r = await api.get<{ invoices: InvoiceSummary[] }>(`/api/invoices?serial=${encodeURIComponent(v)}&limit=5`);
+      const exact = r.invoices.find((i) => String(i.serial) === v) ?? r.invoices[0];
+      if (!exact) { setInfo(`لا توجد فاتورة برقم ${v} — اتأكد من الرقم`); return; }
+      setInfo(`فاتورة ${exact.serial} — النزيل: ${exact.guest_name} — الغرفة: ${exact.room_number || '—'} — الحالة: ${STATUS_LABEL[exact.status] ?? exact.status}`);
+      onPrint(exact.id);
+    } catch { setErr('تعذّر البحث'); }
+    finally { setBusy(false); }
+  }
+
+  // Printable statement for the current filter/date range. Admin/manager only,
+  // and only the fields the user actually set are applied as filters.
+  async function printRange() {
+    if (!['admin', 'manager'].includes(user.role)) { setErr('طباعة كشف المدة للمديرين فقط'); return; }
+    setErr(''); setBusy(true);
+    try {
+      const params = new URLSearchParams();
+      if (fFrom) params.set('from', fFrom);
+      if (fTo) params.set('to', fTo);
+      if (fNum) params.set('serial', fNum);
+      if (fGuest) params.set('guest', fGuest);
+      if (fRoom) params.set('room', fRoom);
+      if (status) params.set('status', status);
+      const r = await api.get<{ rows: RegRow[] }>(`/api/reports/register?${params}`);
+      if (!r.rows.length) { setErr('مفيش فواتير في المدة دي — اتأكد من التواريخ'); return; }
+      const valid = r.rows.filter((x) => x.status !== 'cancelled');
+      const sum = (k: keyof RegRow) => valid.reduce((s, x) => s + Number(x[k] as string), 0).toFixed(2);
+      const fromTxt = fFrom || 'من البداية'; const toTxt = fTo || 'حتى الآن';
+      const rows = [
+        ...valid.map((x) => `<tr><td>${x.serial}</td><td>${x.issuedAt.slice(0, 10)}</td><td>${esc(x.guest)}</td><td>${esc(x.room)}</td><td>${x.stay}</td><td>${x.restaurant}</td><td>${x.services}</td><td>${x.extra}</td><td>${x.subtotal}</td><td>${x.net}</td><td>${x.tax}</td><td>${x.discount}</td><td>${x.total}</td><td>سليمة</td></tr>`),
+        ...r.rows.filter((x) => x.status === 'cancelled').map((x) => `<tr style="background:#ffe6e6"><td>${x.serial}</td><td>${x.issuedAt.slice(0, 10)}</td><td>${esc(x.guest)}</td><td>${esc(x.room)}</td><td colspan="8">ملغاة — خارج الإجماليات</td><td>${x.total}</td><td>ملغاة</td></tr>`),
+      ].join('');
+      const html = `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>كشف فواتير</title>
+        <style>body{font-family:Tahoma,Arial,sans-serif;padding:16px;color:#16202e}
+        h2{margin:0 0 4px;color:#0F2340;text-align:center} p.sub{text-align:center;margin:0 0 12px;color:#555;font-size:13px}
+        table{width:100%;border-collapse:collapse} th,td{border:1px solid #999;padding:6px;text-align:center;font-size:11.5px}
+        th{background:#0F2340;color:#fff} tfoot td{background:#f6f5ef;font-weight:bold}
+        @media print{@page{size:A4 landscape;margin:10mm}}</style></head><body>
+        <h2>فندق قاعود سبورتنج — KAOUD SPORTING HOTEL</h2>
+        <p class="sub">كشف فواتير من: ${fromTxt} إلى: ${toTxt} — عدد الفواتير: ${r.rows.length} — السليمة: ${valid.length} — الملغاة: ${r.rows.length - valid.length}</p>
+        <table><thead><tr><th>رقم</th><th>التاريخ</th><th>النزيل</th><th>الغرفة</th><th>إقامة</th><th>مطعم</th><th>خدمات</th><th>إضافي</th><th>قبل الضريبة</th><th>الصافي</th><th>ضريبة</th><th>خصم</th><th>الإجمالي</th><th>الحالة</th></tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr><td colspan="8">الإجمالي (السليمة فقط)</td><td>${sum('subtotal')}</td><td>${sum('net')}</td><td>${sum('tax')}</td><td>${sum('discount')}</td><td>${sum('total')}</td><td></td></tr></tfoot>
+        </table></body></html>`;
+      if (!openPrintWindow(html)) setErr('المتصفح منع فتح نافذة الطباعة — اسمح بالنوافذ المنبثقة');
+    } catch { setErr('تعذّر تجهيز الكشف'); }
+    finally { setBusy(false); }
+  }
+
+  function exportRegisterExcel() {
+    exportExcel({
+      title: 'فندق قاعود سبورتنج — سجل الفواتير',
+      headers: ['رقم', 'النزيل', 'الغرفة', 'الدخول', 'الخروج', 'صافي', 'ضريبة', 'الإجمالي', 'الحالة'],
+      rows: list.map((i) => [i.serial, i.guest_name, i.room_number || '', i.check_in ?? '', i.check_out ?? '', i.subtotal_net, i.tax_total, i.total, STATUS_LABEL[i.status] ?? i.status]),
+      filename: 'kaoud-invoices.xls',
+    });
+  }
+
   return (
     <>
       <div className="card">
-        <div className="row" style={{ justifyContent: 'space-between' }}>
-          <div className="row">
-            <input placeholder="بحث برقم الفاتورة أو النزيل أو الغرفة" value={q} onChange={(e) => { setQ(e.target.value); setOffset(0); }} style={{ padding: '9px 11px', border: '1px solid var(--border)', borderRadius: 8, minWidth: 260 }} />
-            <select value={status} onChange={(e) => { setStatus(e.target.value); setOffset(0); }} style={{ padding: '9px 11px', border: '1px solid var(--border)', borderRadius: 8 }}>
-              <option value="">كل الحالات</option>
-              <option value="open">مفتوحة</option>
-              <option value="locked">مقفلة</option>
-              <option value="cancelled">ملغاة</option>
-            </select>
+        <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+          <input placeholder="بحث سريع (رقم / نزيل / غرفة)" value={q} onChange={(e) => { setQ(e.target.value); setOffset(0); }} style={{ padding: '9px 11px', border: '1px solid var(--border)', borderRadius: 8, minWidth: 240 }} />
+          <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+            {canWrite && <button className="btn primary" onClick={() => setEditing({ draft: blankDraft(settings) })}>+ فاتورة جديدة</button>}
+            <button className="btn" onClick={exportRegisterExcel} disabled={!list.length}>تصدير Excel</button>
           </div>
-          {canWrite && <button className="btn primary" onClick={() => setEditing({ draft: blankDraft(settings) })}>+ فاتورة جديدة</button>}
         </div>
+
+        <div className="grid cols-3" style={{ marginTop: 12 }}>
+          <label className="field">رقم الفاتورة<input dir="ltr" value={fNum} onChange={(e) => { setFNum(e.target.value); setOffset(0); }} placeholder="مثال: 10246" /></label>
+          <label className="field">التاريخ<input type="date" value={fDate} onChange={(e) => { setFDate(e.target.value); setOffset(0); }} /></label>
+          <label className="field">اسم النزيل<input value={fGuest} onChange={(e) => { setFGuest(e.target.value); setOffset(0); }} /></label>
+          <label className="field">الغرفة<input value={fRoom} onChange={(e) => { setFRoom(e.target.value); setOffset(0); }} /></label>
+          <label className="field">من تاريخ<input type="date" value={fFrom} onChange={(e) => { setFFrom(e.target.value); setOffset(0); }} /></label>
+          <label className="field">إلى تاريخ<input type="date" value={fTo} onChange={(e) => { setFTo(e.target.value); setOffset(0); }} /></label>
+        </div>
+        <div className="row" style={{ gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
+          <select value={status} onChange={(e) => { setStatus(e.target.value); setOffset(0); }} style={{ padding: '9px 11px', border: '1px solid var(--border)', borderRadius: 8 }}>
+            <option value="">كل الحالات</option>
+            <option value="open">مفتوحة</option>
+            <option value="locked">مقفلة</option>
+            <option value="cancelled">ملغاة</option>
+          </select>
+          <button className="btn ghost" onClick={clearSearch}>مسح البحث</button>
+          <button className="btn" disabled={busy} onClick={searchByNumber}>ابحث بالرقم واطبع</button>
+          {['admin', 'manager'].includes(user.role) && <button className="btn" disabled={busy} onClick={printRange}>طباعة كشف المدة</button>}
+        </div>
+        {offline && !online && <div className="alert warn" style={{ marginTop: 10 }}>أنت غير متصل — يمكنك إنشاء فواتير وستُحفظ محليًا بأرقام محجوزة وتُرفع تلقائيًا عند عودة الاتصال.</div>}
+        {info && <div className="alert ok" style={{ marginTop: 10 }}>{info}</div>}
       </div>
 
       {err && <div className="alert err">{err}</div>}
+
+      {offline && queue.length > 0 && (
+        <div className="card" style={{ borderColor: 'var(--accent)' }}>
+          <div className="spread">
+            <h3>فواتير بانتظار المزامنة ({queue.length})</h3>
+            <button className="btn primary" disabled={busy || !online} onClick={flushQueue}>{online ? 'زامن الآن' : 'غير متصل'}</button>
+          </div>
+          <div className="muted" style={{ fontSize: 12.5 }}>اتحفظت محليًا على الجهاز بأرقام محجوزة، وستُرفع تلقائيًا عند عودة الاتصال.</div>
+          <table data-mobile="cards" style={{ marginTop: 10 }}>
+            <thead><tr><th>رقم</th><th>النزيل</th><th>الغرفة</th><th className="num">الإجمالي</th><th>الوقت</th></tr></thead>
+            <tbody>
+              {queue.map((it) => (
+                <tr key={it.opId}>
+                  <td className="mono" data-label="رقم">{it.serial}</td>
+                  <td data-label="النزيل">{it.guestName}</td>
+                  <td className="mono" data-label="الغرفة">{it.roomNumber || '—'}</td>
+                  <td className="num" data-label="الإجمالي">{egp(it.total)}</td>
+                  <td className="muted" data-label="الوقت">{dt(it.createdAt)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <div className="card">
         <table data-mobile="cards">
@@ -106,13 +241,25 @@ export function Invoices({ user, settings, onPrint, openNewSignal = 0 }: { user:
           settings={settings}
           id={editing.id}
           initial={editing.draft}
+          offline={offline && !editing.id}
           onClose={() => setEditing(null)}
-          onSaved={async () => { setEditing(null); await load(); }}
+          onSaved={async () => {
+            setEditing(null);
+            if (online) { try { await syncNow(); } catch { /* stays queued */ } }
+            await refreshQueue(); await load(); onQueued?.();
+          }}
         />
       )}
     </>
   );
 }
+
+interface RegRow {
+  id: string; serial: number; issuedAt: string; guest: string; room: string;
+  status: string; stay: string; restaurant: string; services: string; extra: string;
+  subtotal: string; net: string; tax: string; discount: string; total: string;
+}
+const esc = (s: string) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 interface DraftState {
   guestName: string; roomNumber: string; checkIn: string; checkOut: string;
@@ -148,9 +295,9 @@ async function openEdit(id: string, setEditing: (v: { id: string; draft: DraftSt
   });
 }
 
-function InvoiceEditor({ user, settings, id, initial, onClose, onSaved }: {
+function InvoiceEditor({ user, settings, id, initial, onClose, onSaved, offline = false }: {
   user: SessionUser; settings: Settings | null; id?: string; initial: DraftState;
-  onClose: () => void; onSaved: () => void;
+  onClose: () => void; onSaved: () => void; offline?: boolean;
 }) {
   const [draft, setDraft] = useState<DraftState>(initial);
   const [busy, setBusy] = useState(false);
@@ -184,6 +331,26 @@ function InvoiceEditor({ user, settings, id, initial, onClose, onSaved }: {
   async function save() {
     setErr(''); setBusy(true);
     try {
+      const lines = draft.lines.filter((l) => l.description.trim()).map((l) => ({
+        description: l.description.trim(), qty: Number(l.qty) || 1, unitPrice: l.unitPrice || '0',
+        kind: l.kind as 'room' | 'restaurant' | 'minibar' | 'laundry' | 'extra',
+      }));
+      // Offline: queue the invoice locally, numbered from the device's reserved
+      // block; it is pushed to the server on the next sync.
+      if (offline && !id) {
+        await queueInvoice({
+          guestName: draft.guestName.trim(), roomNumber: draft.roomNumber.trim(),
+          checkIn: draft.checkIn || undefined, checkOut: draft.checkOut || undefined,
+          receiverTaxId: draft.receiverTaxId.trim() || undefined, notes: draft.notes.trim() || undefined,
+          applyDiscount: draft.applyDiscount,
+          vatRate: optNum(draft.vatRate) ?? null, discountRate: optNum(draft.discountRate) ?? null,
+          issuerName: draft.issuerName.trim() || null, issuerTaxId: draft.issuerTaxId.trim() || null,
+          issuerAddress: draft.issuerAddress.trim() || null,
+          lines,
+        });
+        onSaved();
+        return;
+      }
       const body = {
         guestName: draft.guestName.trim(),
         roomNumber: draft.roomNumber.trim(),
@@ -197,16 +364,15 @@ function InvoiceEditor({ user, settings, id, initial, onClose, onSaved }: {
         issuerName: draft.issuerName.trim() || null,
         issuerTaxId: draft.issuerTaxId.trim() || null,
         issuerAddress: draft.issuerAddress.trim() || null,
-        lines: draft.lines.filter((l) => l.description.trim()).map((l) => ({
-          description: l.description.trim(), qty: Number(l.qty) || 1, unitPrice: l.unitPrice || '0', kind: l.kind,
-        })),
+        lines,
       };
       if (id) await api.put(`/api/invoices/${id}`, body);
       else await api.post('/api/invoices', body);
       onSaved();
     } catch (e) {
       const ae = e as ApiError;
-      setErr(ae.code === 'bad_request' ? 'تحقق من صحة البيانات (الوصف والمبلغ مطلوبان)' : `تعذّر الحفظ (${ae.code})`);
+      if (e instanceof TypeError && !id) setErr('تعذّر الاتصال — شغّل الوضع الأوفلاين 📶 لتحفظ الفاتورة محليًا');
+      else setErr(ae.code === 'bad_request' ? 'تحقق من صحة البيانات (الوصف والمبلغ مطلوبان)' : `تعذّر الحفظ (${ae.code})`);
     } finally { setBusy(false); }
   }
 

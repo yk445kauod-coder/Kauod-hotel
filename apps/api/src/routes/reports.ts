@@ -113,6 +113,12 @@ reportRoutes.get('/api/reports/register', requireAuth(), requireRole('admin', 'm
   const params: unknown[] = [tenantId];
   if (from) { where.push('i.issued_at >= ?'); params.push(from); }
   if (to) { where.push('i.issued_at <= ?'); params.push(to + '\uffff'); }
+  const serial = c.req.query('serial')?.trim() ?? '';
+  const guest = c.req.query('guest')?.trim() ?? '';
+  const room = c.req.query('room')?.trim() ?? '';
+  if (serial) { where.push('CAST(i.serial AS TEXT) LIKE ?'); params.push(`%${serial}%`); }
+  if (guest) { where.push('i.guest_name LIKE ?'); params.push(`%${guest}%`); }
+  if (room) { where.push('i.room_number LIKE ?'); params.push(`%${room}%`); }
 
   const rows = await db.all<{
     id: string; serial: number; issued_at: string; guest_name: string; room_number: string;

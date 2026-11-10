@@ -84,6 +84,10 @@ export function PrintView({ invoiceId, onClose }: { invoiceId: string; onClose: 
   const [sigRar, sigRen] = sig(settings.signature_right);
   const cancelled = invoice.status === 'cancelled';
 
+  // Nightly rate = the unit price of the accommodation line (as in the reference invoice).
+  const roomLine = lines.find((l) => l.kind === 'room') ?? (lines.length === 1 ? lines[0] : undefined);
+  const nightlyRate = roomLine ? roomLine.unit_price : null;
+
   const payState = paidNum >= totalNum - 0.005 ? 'paid' : paidNum > 0 ? 'partial' : 'unpaid';
   const payLabel = payState === 'paid' ? 'مدفوعة' : payState === 'partial' ? 'مدفوعة جزئيًا' : 'غير مدفوعة';
 
@@ -137,6 +141,7 @@ export function PrintView({ invoiceId, onClose }: { invoiceId: string; onClose: 
                 <div className="inv-doc-no">No. <bdi>{invoice.serial}</bdi></div>
               </div>
               <div className="inv-doc-date">{d(invoice.issued_at)}</div>
+              <div className="inv-status-line">{STATUS_LABEL[invoice.status] ?? invoice.status}</div>
               <div className={`inv-pay-badge is-${payState}`}>{payLabel}</div>
             </div>
           </header>
@@ -152,9 +157,9 @@ export function PrintView({ invoiceId, onClose }: { invoiceId: string; onClose: 
                   <td><div className="inv-k">تاريخ المغادرة</div><div className="inv-k-en">Departure</div><div className="inv-v"><bdi>{d(invoice.check_out)}</bdi></div></td>
                 </tr>
                 <tr>
-                  <td><div className="inv-k">عدد الليالي</div><div className="inv-k-en">Nights</div><div className="inv-v"><bdi>{calc.nights}</bdi> ليلة</div></td>
+                  <td><div className="inv-k">عدد الليالي</div><div className="inv-k-en">No. of Nights</div><div className="inv-v"><bdi>{calc.nights}</bdi> ليلة</div></td>
+                  <td><div className="inv-k">سعر الليلة</div><div className="inv-k-en">Rate per Night</div><div className="inv-v">{nightlyRate ? <bdi>{money(nightlyRate)}</bdi> : '—'}</div></td>
                   <td><div className="inv-k">تاريخ الفاتورة</div><div className="inv-k-en">Invoice Date</div><div className="inv-v"><bdi>{d(invoice.issued_at)}</bdi></div></td>
-                  <td><div className="inv-k">الحالة</div><div className="inv-k-en">Status</div><div className="inv-v">{STATUS_LABEL[invoice.status] ?? invoice.status}</div></td>
                   <td className="inv-due-cell"><div className="inv-k">المبلغ المطلوب</div><div className="inv-k-en">Total Due</div><div className="inv-v inv-due-val"><bdi>{money(calc.total)}</bdi></div></td>
                 </tr>
               </tbody>

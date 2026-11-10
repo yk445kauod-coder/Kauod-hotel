@@ -13,6 +13,8 @@ import { DirectoryPage } from './pages/Directory';
 import { AuditPage } from './pages/Audit';
 import { ROLE_LABEL } from './format';
 import { useTheme } from './theme';
+import { useOfflineSync } from './useOffline';
+import { isOfflineEnabled, setOfflineEnabled, reserveBlock, getBlock, setBlock, cacheSettings } from './offline';
 
 type Tab = 'dashboard' | 'invoices' | 'reports' | 'directory' | 'serial' | 'users' | 'settings' | 'audit';
 
@@ -36,12 +38,34 @@ export function App() {
   const [navOpen, setNavOpen] = useState(false);
   const [newInvoiceSignal, setNewInvoiceSignal] = useState(0);
   const [error, setError] = useState('');
+  const [offlineMode, setOfflineMode] = useState(isOfflineEnabled());
   const { theme, toggle: toggleTheme } = useTheme();
+  const { online, pending, syncing, sync, refreshPending } = useOfflineSync(offlineMode);
 
   const loadSettings = useCallback(async () => {
-    try { setSettings((await api.get<{ settings: Settings }>('/api/settings')).settings); }
-    catch { /* settings may be unreadable for some roles; not fatal */ }
+    try {
+      const s = (await api.get<{ settings: Settings }>('/api/settings')).settings;
+      setSettings(s);
+      cacheSettings({ vat_rate: s.vat_rate, discount_rate: s.discount_rate, prices_include_tax: s.prices_include_tax });
+    } catch { /* settings may be unreadable for some roles; not fatal */ }
   }, []);
+
+  // Turn offline mode on: reserve a serial block for this device (needs to be
+  // online once), then keep creating invoices offline and syncing on reconnect.
+  const toggleOfflineMode = useCallback(async () => {
+    const next = !offlineMode;
+    if (next) {
+      try {
+        const b = await getBlock();
+        if (!b) await reserveBlock(500);
+      } catch { setError('تعذّر تجهيز الوضع الأوفلاين — تأكد من الاتصال مرة واحدة أولًا'); return; }
+    }
+    setOfflineEnabled(next);
+    setOfflineMode(next);
+    if (next) sync();
+  }, [offlineMode, sync]);
+
+  const onSynced = useCallback(() => { refreshPending(); }, [refreshPending]);
 
   useEffect(() => {
     (async () => {
@@ -132,6 +156,24 @@ export function App() {
             </h2>
           </div>
           <div className="row" style={{ gap: 10 }}>
+            {offlineMode && (
+              <button
+                className={`offline-chip ${online ? 'is-on' : 'is-off'}`}
+                onClick={() => sync()}
+                disabled={!online || syncing}
+                title={online ? (pending ? `${pending} فاتورة في انتظار المزامنة` : 'متصل — كل شيء متزامن') : 'غير متصل — الفواتير محفوظة محليًا'}
+              >
+                {online ? '🟢' : '🔴'} {syncing ? 'جارٍ المزامنة…' : pending ? `${pending} بانتظار المزامنة` : 'متزامن'}
+              </button>
+            )}
+            <button
+              className={`btn ghost ${offlineMode ? 'is-active' : ''}`}
+              onClick={toggleOfflineMode}
+              title={offlineMode ? 'إيقاف الوضع الأوفلاين' : 'تشغيل الوضع الأوفلاين (إنشاء فواتير بدون إنترنت)'}
+              style={{ padding: '7px 10px', fontSize: 16 }}
+            >
+              {offlineMode ? '📴' : '📶'}
+            </button>
             <span className="muted">{settings?.hotel_name ?? ''}</span>
             <button
               className="btn ghost"
@@ -147,7 +189,7 @@ export function App() {
         <div className="content no-print">
           {error && <div className="alert err">{error}</div>}
           {tab === 'dashboard' && <Dashboard user={user} onOpenInvoice={(id) => { setPrintId(id); }} onNewInvoice={() => { setTab('invoices'); setNewInvoiceSignal((n) => n + 1); }} />}
-          {tab === 'invoices' && <Invoices user={user} settings={settings} onPrint={(id) => setPrintId(id)} openNewSignal={newInvoiceSignal} />}
+          {tab === 'invoices' && <Invoices user={user} settings={settings} onPrint={(id) => setPrintId(id)} openNewSignal={newInvoiceSignal} offline={offlineMode} online={online} onQueued={onSynced} />}
           {tab === 'reports' && <ReportsPage />}
           {tab === 'directory' && <DirectoryPage user={user} />}
           {tab === 'serial' && <SerialPage user={user} />}

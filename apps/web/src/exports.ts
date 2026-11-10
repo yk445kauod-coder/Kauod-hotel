@@ -60,3 +60,15 @@ export function readJsonFile(file: File): Promise<unknown> {
     r.readAsText(file);
   });
 }
+
+// Open a standalone printable document (used for the date-range statement).
+export function openPrintWindow(html: string): boolean {
+  const w = window.open('', '_blank', 'width=960,height=760');
+  if (!w) return false;
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+  setTimeout(() => w.print(), 350);
+  return true;
+}

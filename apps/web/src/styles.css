@@ -330,6 +330,18 @@ textarea { resize: vertical; }
 .btn.danger:hover { filter: brightness(1.06); }
 .btn.ghost { background: transparent; border-color: transparent; color: var(--brand); }
 .btn.ghost:hover { background: var(--brand-tint); border-color: transparent; }
+.btn.ghost.is-active { background: var(--brand-tint); border-color: var(--brand-tint-strong); }
+
+/* offline status chip in the top bar */
+.offline-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 11px; border-radius: 999px; font-size: 12.5px; font-weight: 700;
+  border: 1px solid var(--border); background: var(--surface-2); color: var(--text-2);
+  cursor: pointer; white-space: nowrap;
+}
+.offline-chip.is-on { border-color: var(--ok-border); background: var(--ok-bg); color: var(--ok); }
+.offline-chip.is-off { border-color: var(--warn-border); background: var(--warn-bg); color: var(--warn); }
+.offline-chip:disabled { cursor: default; }
 .btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
 .btn.block { width: 100%; }
 
@@ -455,6 +467,7 @@ td.num, th.num { text-align: end; font-variant-numeric: tabular-nums; direction:
 .inv-doc-no { font-size: 21px; font-weight: 900; margin-top: 2px; }
 .inv-doc-no bdi { direction: ltr; }
 .inv-doc-date { text-align: center; margin-top: 7px; font-size: 12px; color: #4a5870; }
+.inv-status-line { text-align: center; margin-top: 3px; font-size: 11.5px; font-weight: 800; color: #0F2340; }
 .inv-pay-badge { display: block; width: fit-content; margin: 7px auto 0; padding: 3px 12px; border-radius: 999px; font-size: 10.5px; font-weight: 800; }
 .inv-pay-badge.is-paid { background: #e6f4ea; color: #1c6b3a; border: 1px solid #b7dfc4; }
 .inv-pay-badge.is-partial { background: #fdf3e0; color: #8a5a00; border: 1px solid #f0d79a; }
