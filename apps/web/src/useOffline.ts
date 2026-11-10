@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { isOnline, pendingCount, syncNow, isOfflineEnabled } from './offline';
+import { flushOutbox, pendingOps } from './outbox';
 
 export interface OfflineState {
   online: boolean;
@@ -9,26 +10,33 @@ export interface OfflineState {
   refreshPending: () => Promise<void>;
 }
 
-// Tracks connectivity and the offline queue, and auto-flushes it when the
-// browser comes back online (only while offline mode is enabled).
-export function useOfflineSync(enabled: boolean): OfflineState {
+// Tracks connectivity and the offline queues (the legacy invoice queue plus the
+// generic write outbox), and auto-flushes them when the browser reconnects.
+// The generic outbox is always active; the invoice queue only while offline mode
+// is on, which `sync()` checks itself.
+export function useOfflineSync(): OfflineState {
   const [online, setOnline] = useState(isOnline());
   const [pending, setPending] = useState(0);
   const [syncing, setSyncing] = useState(false);
 
   const refreshPending = useCallback(async () => {
-    try { setPending(await pendingCount()); } catch { /* ignore */ }
+    try {
+      const [invoices, ops] = await Promise.all([pendingCount(), pendingOps()]);
+      setPending(invoices + ops);
+    } catch { /* ignore */ }
   }, []);
 
   const sync = useCallback(async () => {
-    if (!isOnline() || !isOfflineEnabled()) return;
+    if (!isOnline()) return;
     setSyncing(true);
-    try { await syncNow(); await refreshPending(); }
-    finally { setSyncing(false); }
+    try {
+      if (isOfflineEnabled()) await syncNow();
+      await flushOutbox();
+      await refreshPending();
+    } finally { setSyncing(false); }
   }, [refreshPending]);
 
   useEffect(() => {
-    if (!enabled) return;
     refreshPending();
     const goOnline = () => { setOnline(true); sync(); };
     const goOffline = () => setOnline(false);
@@ -41,7 +49,7 @@ export function useOfflineSync(enabled: boolean): OfflineState {
       window.removeEventListener('offline', goOffline);
       window.clearInterval(timer);
     };
-  }, [enabled, refreshPending, sync]);
+  }, [refreshPending, sync]);
 
   return { online, pending, syncing, sync, refreshPending };
 }

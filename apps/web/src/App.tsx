@@ -15,7 +15,8 @@ import { MonitoringPage } from './pages/Monitoring';
 import { ROLE_LABEL } from './format';
 import { useTheme } from './theme';
 import { useOfflineSync } from './useOffline';
-import { isOfflineEnabled, setOfflineEnabled, reserveBlock, getBlock, setBlock, cacheSettings } from './offline';
+import { isOfflineEnabled, setOfflineEnabled, reserveBlock, getBlock, setBlock, cacheSettings, pendingCount } from './offline';
+import { pendingOps } from './outbox';
 import { DynamicIsland } from './components/DynamicIsland';
 import { downloadJson } from './exports';
 
@@ -44,7 +45,7 @@ export function App() {
   const [error, setError] = useState('');
   const [offlineMode, setOfflineMode] = useState(isOfflineEnabled());
   const { theme, toggle: toggleTheme } = useTheme();
-  const { online, pending, syncing, sync, refreshPending } = useOfflineSync(offlineMode);
+  const { online, pending, syncing, sync, refreshPending } = useOfflineSync();
 
   const loadSettings = useCallback(async () => {
     try {
@@ -105,6 +106,21 @@ export function App() {
 
   const onLogin = async (u: SessionUser) => { setUser(u); await loadSettings(); setTab('dashboard'); };
   const onLogout = async () => {
+    // Logging out must not strand local writes: block it while anything is
+    // queued or while the network is down, so nothing is lost.
+    const queued = await pendingOps().catch(() => 0);
+    const invoicePending = await pendingCount().catch(() => 0);
+    if (queued + invoicePending > 0) {
+      if (!online) { setError('لا يمكن تسجيل الخروج الآن — لديك بيانات بانتظار المزامنة وأنت غير متصل بالإنترنت'); return; }
+      setError('جارٍ رفع البيانات المتبقية قبل تسجيل الخروج…');
+      await sync();
+      const left = (await pendingOps().catch(() => 0)) + (await pendingCount().catch(() => 0));
+      if (left > 0) { setError('تعذّر رفع كل البيانات — أعد المحاولة قبل تسجيل الخروج'); return; }
+    } else if (!online) {
+      setError('لا يمكن تسجيل الخروج بدون اتصال بالإنترنت');
+      return;
+    }
+    setError('');
     try { await api.post('/api/auth/logout'); } catch { /* ignore */ }
     setUser(null); setSettings(null);
   };
@@ -171,16 +187,14 @@ export function App() {
             </h2>
           </div>
           <div className="row" style={{ gap: 10 }}>
-            {offlineMode && (
-              <button
-                className={`offline-chip ${online ? 'is-on' : 'is-off'}`}
-                onClick={() => sync()}
-                disabled={!online || syncing}
-                title={online ? (pending ? `${pending} فاتورة في انتظار المزامنة` : 'متصل — كل شيء متزامن') : 'غير متصل — الفواتير محفوظة محليًا'}
-              >
-                {online ? '🟢' : '🔴'} {syncing ? 'جارٍ المزامنة…' : pending ? `${pending} بانتظار المزامنة` : 'متزامن'}
-              </button>
-            )}
+            <button
+              className={`offline-chip ${online ? 'is-on' : 'is-off'}`}
+              onClick={() => sync()}
+              disabled={!online || syncing}
+              title={online ? (pending ? `${pending} عملية في انتظار المزامنة` : 'متصل — كل شيء متزامن') : 'غير متصل — التغييرات محفوظة محليًا'}
+            >
+              {online ? '🟢' : '🔴'} {syncing ? 'جارٍ المزامنة…' : pending ? `${pending} بانتظار المزامنة` : 'متزامن'}
+            </button>
             <button
               className={`btn ghost ${offlineMode ? 'is-active' : ''}`}
               onClick={toggleOfflineMode}
