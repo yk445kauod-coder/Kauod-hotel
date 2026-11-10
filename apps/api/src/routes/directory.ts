@@ -4,6 +4,7 @@ import type { Env } from '../db.js';
 import { requireAuth, requireRole } from '../auth-middleware.js';
 import { audit, newId } from '../audit.js';
 import { clientIp } from '../http.js';
+import { idempotency } from '../idempotency.js';
 
 export const directoryRoutes = new Hono<{ Bindings: Env }>();
 
@@ -13,7 +14,7 @@ directoryRoutes.get('/api/rooms', requireAuth(), async (c) => {
   return c.json({ rooms: rows });
 });
 
-directoryRoutes.post('/api/rooms', requireAuth(), requireRole('admin', 'manager'), async (c) => {
+directoryRoutes.post('/api/rooms', requireAuth(), requireRole('admin', 'manager'), idempotency(), async (c) => {
   const db = c.get('db');
   const { tenantId, id: userId } = c.get('auth').user;
   const parsed = RoomSchema.safeParse(await c.req.json().catch(() => null));
@@ -26,7 +27,7 @@ directoryRoutes.post('/api/rooms', requireAuth(), requireRole('admin', 'manager'
   return c.json({ ok: true, id }, 201);
 });
 
-directoryRoutes.patch('/api/rooms/:id', requireAuth(), requireRole('admin', 'manager'), async (c) => {
+directoryRoutes.patch('/api/rooms/:id', requireAuth(), requireRole('admin', 'manager'), idempotency(), async (c) => {
   const db = c.get('db');
   const { tenantId, id: userId } = c.get('auth').user;
   const parsed = RoomSchema.partial().safeParse(await c.req.json().catch(() => null));
@@ -45,7 +46,7 @@ directoryRoutes.patch('/api/rooms/:id', requireAuth(), requireRole('admin', 'man
   return c.json({ ok: true });
 });
 
-directoryRoutes.delete('/api/rooms/:id', requireAuth(), requireRole('admin', 'manager'), async (c) => {
+directoryRoutes.delete('/api/rooms/:id', requireAuth(), requireRole('admin', 'manager'), idempotency(), async (c) => {
   const db = c.get('db');
   const { tenantId, id: userId } = c.get('auth').user;
   await db.run(`DELETE FROM rooms WHERE id = ? AND tenant_id = ?`, [(c.req.param('id') ?? ''), tenantId]);
@@ -63,7 +64,7 @@ directoryRoutes.get('/api/guests', requireAuth(), async (c) => {
   return c.json({ guests: rows });
 });
 
-directoryRoutes.post('/api/guests', requireAuth(), requireRole('admin', 'manager', 'reception'), async (c) => {
+directoryRoutes.post('/api/guests', requireAuth(), requireRole('admin', 'manager', 'reception'), idempotency(), async (c) => {
   const db = c.get('db');
   const { tenantId, id: userId } = c.get('auth').user;
   const parsed = GuestSchema.safeParse(await c.req.json().catch(() => null));
@@ -86,7 +87,7 @@ directoryRoutes.get('/api/reservations', requireAuth(), async (c) => {
   return c.json({ reservations: rows });
 });
 
-directoryRoutes.post('/api/reservations', requireAuth(), requireRole('admin', 'manager', 'reception'), async (c) => {
+directoryRoutes.post('/api/reservations', requireAuth(), requireRole('admin', 'manager', 'reception'), idempotency(), async (c) => {
   const db = c.get('db');
   const { tenantId, id: userId } = c.get('auth').user;
   const parsed = ReservationSchema.safeParse(await c.req.json().catch(() => null));
@@ -101,7 +102,7 @@ directoryRoutes.post('/api/reservations', requireAuth(), requireRole('admin', 'm
   return c.json({ ok: true, id }, 201);
 });
 
-directoryRoutes.patch('/api/reservations/:id', requireAuth(), requireRole('admin', 'manager', 'reception'), async (c) => {
+directoryRoutes.patch('/api/reservations/:id', requireAuth(), requireRole('admin', 'manager', 'reception'), idempotency(), async (c) => {
   const db = c.get('db');
   const { tenantId, id: userId } = c.get('auth').user;
   const body = await c.req.json().catch(() => ({})) as { status?: string };

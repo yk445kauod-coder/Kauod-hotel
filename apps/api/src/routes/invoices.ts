@@ -13,6 +13,7 @@ import {
 import { newId } from '../audit.js';
 import { etaConfigured } from '../eta-service.js';
 import { clientIp } from '../http.js';
+import { idempotency } from '../idempotency.js';
 
 export const invoiceRoutes = new Hono<{ Bindings: Env }>();
 
@@ -68,7 +69,7 @@ invoiceRoutes.get('/api/invoices/:id', requireAuth(), async (c) => {
   return c.json({ invoice: inv, lines, paid });
 });
 
-invoiceRoutes.post('/api/invoices', requireAuth(), requireRole('admin', 'manager', 'reception'), async (c) => {
+invoiceRoutes.post('/api/invoices', requireAuth(), requireRole('admin', 'manager', 'reception'), idempotency(), async (c) => {
   const db = c.get('db');
   const { tenantId, id: userId } = c.get('auth').user;
   const parsed = InvoiceInputSchema.safeParse(await c.req.json().catch(() => null));
@@ -89,7 +90,7 @@ invoiceRoutes.post('/api/invoices', requireAuth(), requireRole('admin', 'manager
 });
 
 // Recompute + update an invoice that is still open (not locked/cancelled).
-invoiceRoutes.put('/api/invoices/:id', requireAuth(), requireRole('admin', 'manager', 'reception'), async (c) => {
+invoiceRoutes.put('/api/invoices/:id', requireAuth(), requireRole('admin', 'manager', 'reception'), idempotency(), async (c) => {
   const db = c.get('db');
   const { tenantId, id: userId } = c.get('auth').user;
   const inv = await getInvoice(db, tenantId, (c.req.param('id') ?? ''));
@@ -134,7 +135,7 @@ invoiceRoutes.put('/api/invoices/:id', requireAuth(), requireRole('admin', 'mana
   return c.json({ invoice: updated, lines });
 });
 
-invoiceRoutes.post('/api/invoices/:id/lock', requireAuth(), requireRole('admin', 'manager'), async (c) => {
+invoiceRoutes.post('/api/invoices/:id/lock', requireAuth(), requireRole('admin', 'manager'), idempotency(), async (c) => {
   const db = c.get('db');
   const { tenantId, id: userId } = c.get('auth').user;
   const inv = await getInvoice(db, tenantId, (c.req.param('id') ?? ''));
@@ -147,7 +148,7 @@ invoiceRoutes.post('/api/invoices/:id/lock', requireAuth(), requireRole('admin',
   return c.json({ ok: true });
 });
 
-invoiceRoutes.post('/api/invoices/:id/unlock', requireAuth(), requireRole('admin'), async (c) => {
+invoiceRoutes.post('/api/invoices/:id/unlock', requireAuth(), requireRole('admin'), idempotency(), async (c) => {
   const db = c.get('db');
   const { tenantId, id: userId } = c.get('auth').user;
   const inv = await getInvoice(db, tenantId, (c.req.param('id') ?? ''));
@@ -160,7 +161,7 @@ invoiceRoutes.post('/api/invoices/:id/unlock', requireAuth(), requireRole('admin
 });
 
 // Cancel is a soft delete: the row stays for the serial audit trail.
-invoiceRoutes.post('/api/invoices/:id/cancel', requireAuth(), requireRole('admin', 'manager'), async (c) => {
+invoiceRoutes.post('/api/invoices/:id/cancel', requireAuth(), requireRole('admin', 'manager'), idempotency(), async (c) => {
   const db = c.get('db');
   const { tenantId, id: userId } = c.get('auth').user;
   const inv = await getInvoice(db, tenantId, (c.req.param('id') ?? ''));
@@ -230,7 +231,7 @@ invoiceRoutes.get('/api/invoices/:id/payments', requireAuth(), async (c) => {
   return c.json({ payments: rows, paid: await paidTotal(db, tenantId, inv.id) });
 });
 
-invoiceRoutes.post('/api/invoices/:id/payments', requireAuth(), requireRole('admin', 'manager', 'reception', 'accountant'), async (c) => {
+invoiceRoutes.post('/api/invoices/:id/payments', requireAuth(), requireRole('admin', 'manager', 'reception', 'accountant'), idempotency(), async (c) => {
   const db = c.get('db');
   const { tenantId, id: userId } = c.get('auth').user;
   const inv = await getInvoice(db, tenantId, (c.req.param('id') ?? ''));
@@ -249,7 +250,7 @@ invoiceRoutes.post('/api/invoices/:id/payments', requireAuth(), requireRole('adm
   return c.json({ ok: true, paid: await paidTotal(db, tenantId, inv.id) }, 201);
 });
 
-invoiceRoutes.delete('/api/payments/:id', requireAuth(), requireRole('admin', 'manager'), async (c) => {
+invoiceRoutes.delete('/api/payments/:id', requireAuth(), requireRole('admin', 'manager'), idempotency(), async (c) => {
   const db = c.get('db');
   const { tenantId, id: userId } = c.get('auth').user;
   const pay = await db.one<{ id: string; invoice_id: string }>(

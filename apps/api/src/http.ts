@@ -45,7 +45,7 @@ export function corsHeaders(env: Env, origin: string | null): Record<string, str
   const allowed = allowedOrigins(env);
   const headers: Record<string, string> = {
     'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, X-CSRF-Token',
+    'Access-Control-Allow-Headers': 'Content-Type, X-CSRF-Token, X-Op-Key',
     'Access-Control-Max-Age': '600',
     Vary: 'Origin',
   };

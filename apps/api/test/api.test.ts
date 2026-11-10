@@ -71,6 +71,7 @@ async function req(path: string, init: RequestInit = {}, ctx?: Ctx): Promise<Res
     headers['Cookie'] = ctx.cookie;
     if (init.method && init.method !== 'GET') headers['X-CSRF-Token'] = ctx.csrf;
   }
+  if (init.headers) Object.assign(headers, init.headers as Record<string, string>);
   // Miniflare ships its own (undici-based) Request/Response types that clash
   // with the DOM lib, so cast at the boundary and expose the DOM Response.
   const res = await mf.dispatchFetch(`${base}${path}`, { ...init, headers } as never);
@@ -385,5 +386,19 @@ describe('API integration', () => {
     expect(owner).toBeTruthy();
     // The owner created invoices earlier in this suite.
     expect(owner!.invoices).toBeGreaterThan(0);
+  });
+
+  it('applies a write with the same X-Op-Key exactly once', async () => {
+    const ctx = await sharedCtx();
+    const body = JSON.stringify({ number: 'op-1', nightlyRate: 100 });
+    const first = await req('/api/rooms', { method: 'POST', headers: { 'X-Op-Key': 'k-rooms-1' } as never, body }, ctx);
+    const second = await req('/api/rooms', { method: 'POST', headers: { 'X-Op-Key': 'k-rooms-1' } as never, body }, ctx);
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(201);
+    const a = await first.json() as { id: string };
+    const b = await second.json() as { id: string };
+    expect(b.id).toBe(a.id);
+    const list = await (await req('/api/rooms', {}, ctx)).json() as { rooms: { number: string }[] };
+    expect(list.rooms.filter((r) => r.number === 'op-1')).toHaveLength(1);
   });
 });
