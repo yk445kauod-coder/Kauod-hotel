@@ -1,0 +1,123 @@
+:root {
+  --bg: #f4f6f9;
+  --surface: #ffffff;
+  --surface-2: #eef2f7;
+  --border: #d7dee8;
+  --text: #16202e;
+  --muted: #5a6b80;
+  --brand: #0f5132;
+  --brand-2: #14663f;
+  --accent: #b8860b;
+  --danger: #b02a37;
+  --warn: #9a6700;
+  --ok: #1a7f37;
+  --radius: 10px;
+  --shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 1px 3px rgba(16, 24, 40, .1);
+  font-family: "Segoe UI", Tahoma, "Noto Naskh Arabic", system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--text); }
+
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+
+.app { display: flex; min-height: 100%; }
+
+/* ---------- sidebar ---------- */
+.sidebar {
+  width: 240px; background: var(--brand); color: #eaf3ee; display: flex; flex-direction: column;
+  padding: 16px 12px; gap: 4px; flex-shrink: 0;
+}
+.sidebar h1 { font-size: 17px; margin: 4px 8px 16px; line-height: 1.5; }
+.sidebar .hotel { font-size: 12px; color: #a8cbb8; margin: 0 8px 12px; }
+.navbtn {
+  display: flex; align-items: center; gap: 10px; background: transparent; border: 0; color: inherit;
+  padding: 10px 12px; border-radius: 8px; text-align: right; width: 100%; font-size: 14.5px;
+}
+.navbtn:hover { background: rgba(255,255,255,.09); }
+.navbtn.active { background: rgba(255,255,255,.17); font-weight: 600; }
+.navbtn .ico { width: 20px; text-align: center; }
+.sidebar .spacer { flex: 1; }
+.sidebar .who { font-size: 12px; color: #a8cbb8; padding: 8px; border-top: 1px solid rgba(255,255,255,.15); }
+
+/* ---------- main ---------- */
+.main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.topbar {
+  background: var(--surface); border-bottom: 1px solid var(--border); padding: 12px 20px;
+  display: flex; align-items: center; gap: 12px; justify-content: space-between;
+}
+.topbar h2 { margin: 0; font-size: 18px; }
+.content { padding: 20px; max-width: 1200px; width: 100%; margin: 0 auto; }
+
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; margin-bottom: 16px; }
+.card h3 { margin: 0 0 14px; font-size: 15.5px; }
+
+.grid { display: grid; gap: 12px; }
+.grid.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grid.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.grid.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 900px) { .grid.cols-2, .grid.cols-3, .grid.cols-4 { grid-template-columns: 1fr; } .sidebar { display: none; } }
+
+label.field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
+label.field input, label.field select, label.field textarea {
+  padding: 9px 11px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface);
+}
+label.field input:focus, label.field select:focus { outline: 2px solid var(--brand-2); outline-offset: 1px; }
+
+.btn { border: 1px solid var(--border); background: var(--surface); padding: 9px 14px; border-radius: 8px; font-size: 14px; }
+.btn:hover { background: var(--surface-2); }
+.btn.primary { background: var(--brand); border-color: var(--brand); color: #fff; }
+.btn.primary:hover { background: var(--brand-2); }
+.btn.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+.btn.ghost { background: transparent; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.row.end { justify-content: flex-end; }
+
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: right; padding: 9px 10px; border-bottom: 1px solid var(--border); }
+th { color: var(--muted); font-weight: 600; font-size: 12.5px; background: var(--surface-2); }
+tbody tr:hover { background: var(--surface-2); }
+td.num, th.num { text-align: left; font-variant-numeric: tabular-nums; direction: ltr; }
+
+.badge { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; border: 1px solid transparent; }
+.badge.open { background: #e7f1ff; color: #0b4ea2; border-color: #bcd8ff; }
+.badge.locked { background: #e6f4ea; color: var(--ok); border-color: #b7e1c4; }
+.badge.cancelled { background: #fbe9eb; color: var(--danger); border-color: #f3c2c8; }
+.badge.eta { background: #fff5e0; color: var(--warn); border-color: #ffe0a3; }
+
+.stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; }
+.stat .k { font-size: 12.5px; color: var(--muted); }
+.stat .v { font-size: 22px; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; direction: ltr; text-align: right; }
+
+.alert { padding: 10px 13px; border-radius: 8px; font-size: 13.5px; margin-bottom: 12px; }
+.alert.err { background: #fbe9eb; color: var(--danger); border: 1px solid #f3c2c8; }
+.alert.ok { background: #e6f4ea; color: var(--ok); border: 1px solid #b7e1c4; }
+.alert.warn { background: #fff5e0; color: var(--warn); border: 1px solid #ffe0a3; }
+
+.login-wrap { display: flex; align-items: center; justify-content: center; min-height: 100%; padding: 20px; }
+.login-card { width: 100%; max-width: 420px; }
+.login-card .brand { text-align: center; margin-bottom: 6px; color: var(--brand); }
+.muted { color: var(--muted); font-size: 13px; }
+.right { text-align: right; }
+.spread { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.mono { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; direction: ltr; }
+.totals { max-width: 340px; margin-inline-start: auto; }
+.totals div { display: flex; justify-content: space-between; padding: 5px 0; }
+.totals .grand { border-top: 2px solid var(--text); margin-top: 6px; padding-top: 8px; font-weight: 700; font-size: 17px; }
+
+/* ---------- print ---------- */
+.print-area { display: none; }
+@media print {
+  body { background: #fff; }
+  .app, .no-print { display: none !important; }
+  .print-area { display: block !important; padding: 0; }
+  @page { size: A4; margin: 12mm; }
+  .print-area table { font-size: 12px; }
+  .print-head { display: flex; justify-content: space-between; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 12px; }
+  .print-title { text-align: center; font-size: 20px; font-weight: 700; margin: 10px 0; }
+  .qr { text-align: center; margin-top: 10px; }
+  .qr img { width: 130px; height: 130px; }
+}
