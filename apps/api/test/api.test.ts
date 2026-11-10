@@ -279,4 +279,43 @@ describe('API integration', () => {
     expect(body.settings.signature_left).toBe('المدير المالي|Financial Controller');
     expect(body.settings.footer_note).toBe('ملاحظة');
   });
+
+  it('reserves a device number block and accepts invoices inside it', async () => {
+    const ctx = await sharedCtx();
+    const reserve = await req('/api/serial/reserve', { method: 'POST', body: JSON.stringify({ deviceId: 'device-test-01', size: 3 }) }, ctx);
+    expect(reserve.status).toBe(200);
+    const blk = await reserve.json() as { start: number; end: number };
+    expect(blk.end - blk.start).toBe(2);
+
+    // Creating inside the block is accepted.
+    const ok = await req('/api/invoices', { method: 'POST', body: JSON.stringify({
+      guestName: 'offline-1', serial: blk.start, opId: 'op-1', lines: [{ description: 'x', qty: 1, unitPrice: 100 }],
+    }) }, ctx);
+    expect(ok.status).toBe(201);
+    const okBody = await ok.json() as { invoice: { serial: number } };
+    expect(okBody.invoice.serial).toBe(blk.start);
+
+    // A serial outside any reserved block is refused.
+    const bad = await req('/api/invoices', { method: 'POST', body: JSON.stringify({
+      guestName: 'offline-bad', serial: 9_999_999, lines: [{ description: 'x', qty: 1, unitPrice: 100 }],
+    }) }, ctx);
+    expect(bad.status).toBe(409);
+    const badBody = await bad.json() as { error: string };
+    expect(badBody.error).toBe('serial_not_reserved');
+  });
+
+  it('is idempotent: a replayed offline write returns the same invoice', async () => {
+    const ctx = await sharedCtx();
+    const reserve = await req('/api/serial/reserve', { method: 'POST', body: JSON.stringify({ deviceId: 'device-test-02', size: 2 }) }, ctx);
+    const blk = await reserve.json() as { start: number };
+    const body = JSON.stringify({ guestName: 'dup', serial: blk.start, opId: 'op-dup', lines: [{ description: 'x', qty: 1, unitPrice: 100 }] });
+    const first = await req('/api/invoices', { method: 'POST', body }, ctx);
+    const second = await req('/api/invoices', { method: 'POST', body }, ctx);
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(201);
+    const a = await first.json() as { invoice: { id: string; serial: number } };
+    const b = await second.json() as { invoice: { id: string; serial: number } };
+    expect(b.invoice.id).toBe(a.invoice.id);
+    expect(b.invoice.serial).toBe(a.invoice.serial);
+  });
 });

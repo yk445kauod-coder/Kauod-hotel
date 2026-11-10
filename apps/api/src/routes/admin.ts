@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { CreateUserSchema, UpdateUserSchema, SettingsSchema, ChangeSerialSchema } from '@kaoud/core';
+import { CreateUserSchema, UpdateUserSchema, SettingsSchema, ChangeSerialSchema, SerialReserveSchema } from '@kaoud/core';
 import { passwordIssues } from '../crypto.js';
 import type { Env } from '../db.js';
 import { requireAuth, requireRole } from '../auth-middleware.js';
@@ -152,6 +152,38 @@ adminRoutes.put('/api/serial', requireAuth(), requireRole('admin'), async (c) =>
   const counter = await loadCounter(db, tenantId);
   const settings = await loadSettings(db, tenantId);
   return c.json({ serialStart: settings?.serial_start, nextSerial: previewNextSerial(counter), nextOverride: counter?.next_override ?? null });
+});
+
+// ---------- offline device number blocks ----------
+// A desktop client reserves a contiguous block of serials it may allocate from
+// while offline. Blocks never overlap: the new block starts after the highest
+// number already reserved or used, so two devices can never print the same No.
+adminRoutes.post('/api/serial/reserve', requireAuth(), requireRole('admin', 'manager', 'reception'), async (c) => {
+  const db = c.get('db');
+  const { tenantId, id: actorId } = c.get('auth').user;
+  const parsed = SerialReserveSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json({ error: 'bad_request', details: parsed.error.issues }, 400);
+  const { deviceId, size } = parsed.data;
+
+  const existing = await db.one<{ start_serial: number; end_serial: number }>(
+    `SELECT start_serial, end_serial FROM device_serials WHERE tenant_id = ? AND device_id = ?`,
+    [tenantId, deviceId]);
+  if (existing) {
+    return c.json({ deviceId, start: existing.start_serial, end: existing.end_serial, next: existing.start_serial });
+  }
+
+  const used = await db.one<{ m: number | null }>(`SELECT MAX(serial) AS m FROM invoices WHERE tenant_id = ?`, [tenantId]);
+  const reserved = await db.one<{ m: number | null }>(`SELECT MAX(end_serial) AS m FROM device_serials WHERE tenant_id = ?`, [tenantId]);
+  const counter = await loadCounter(db, tenantId);
+  const start = Math.max(used?.m ?? 0, reserved?.m ?? 0, (counter?.next_serial ?? 10246) - 1) + 1;
+  const end = start + size - 1;
+  await db.run(
+    `INSERT INTO device_serials (tenant_id, device_id, start_serial, end_serial, created_at) VALUES (?, ?, ?, ?, ?)`,
+    [tenantId, deviceId, start, end, new Date().toISOString()]);
+  // Keep the online counter ahead of every reserved block.
+  await db.run(`UPDATE counters SET next_serial = ? WHERE tenant_id = ? AND next_serial <= ?`, [end + 1, tenantId, end]);
+  await audit(db, { tenantId, userId: actorId, action: 'serial.reserve', entity: 'device', entityId: deviceId, detail: { start, end }, ip: clientIp(c) });
+  return c.json({ deviceId, start, end, next: start });
 });
 
 // ---------- serial audit (gaps / duplicates) ----------

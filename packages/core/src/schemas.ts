@@ -22,6 +22,8 @@ export const InvoiceInputSchema = z.object({
   notes: z.string().trim().max(1000).optional().default(''),
   guestId: z.string().uuid().optional(),
   reservationId: z.string().uuid().optional(),
+  serial: z.coerce.number().int().min(1).optional(),
+  opId: z.string().trim().max(80).optional(),
   // Per-invoice tax/branding overrides. Omitted or null = inherit from settings.
   vatRate: z.coerce.number().min(0).max(100).nullable().optional(),
   discountRate: z.coerce.number().min(0).max(100).nullable().optional(),
@@ -112,6 +114,11 @@ export const SettingsSchema = z.object({
 export const ChangeSerialSchema = z.object({
   serialStart: z.coerce.number().int().min(1).optional(),
   nextOverride: z.coerce.number().int().min(1).nullable().optional(),
+});
+
+export const SerialReserveSchema = z.object({
+  deviceId: z.string().trim().min(4).max(80),
+  size: z.coerce.number().int().min(1).max(500).default(100),
 });
 
 export type LineItemDto = z.infer<typeof LineItemSchema>;

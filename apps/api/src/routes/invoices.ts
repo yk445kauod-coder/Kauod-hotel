@@ -66,7 +66,15 @@ invoiceRoutes.post('/api/invoices', requireAuth(), requireRole('admin', 'manager
   const { tenantId, id: userId } = c.get('auth').user;
   const parsed = InvoiceInputSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: 'bad_request', details: parsed.error.issues }, 400);
-  const { id, serial } = await createInvoice(db, tenantId, userId, parsed.data);
+  let id: string; let serial: number;
+  try {
+    ({ id, serial } = await createInvoice(db, tenantId, userId, parsed.data));
+  } catch (e) {
+    const msg = (e as Error).message;
+    if (msg === 'serial_not_reserved') return c.json({ error: 'serial_not_reserved' }, 409);
+    if (msg === 'settings_missing' || msg === 'counter_missing') return c.json({ error: msg }, 500);
+    throw e;
+  }
   await audit(db, { tenantId, userId, action: 'invoice.create', entity: 'invoice', entityId: id, detail: { serial }, ip: clientIp(c) });
   const inv = await getInvoice(db, tenantId, id);
   const lines = await getInvoiceLines(db, tenantId, id);

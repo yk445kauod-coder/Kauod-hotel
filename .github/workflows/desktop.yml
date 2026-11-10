@@ -1,0 +1,51 @@
+name: desktop
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/desktop/**'
+      - '.github/workflows/desktop.yml'
+  pull_request:
+    paths:
+      - 'apps/desktop/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: apps/desktop
+    steps:
+      - uses: actions/checkout@v4
+
+      # Go 1.20 is the last toolchain that still runs on Windows 7 / 8.
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.20.14'
+          cache-dependency-path: apps/desktop/go.sum
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./internal/...
+
+      - name: Build 32-bit
+        run: go build -trimpath -ldflags "-H=windowsgui -s -w" -o dist/kaoud-hotel-386.exe .
+        env:
+          GOARCH: '386'
+          CGO_ENABLED: '0'
+
+      - name: Build 64-bit
+        run: go build -trimpath -ldflags "-H=windowsgui -s -w" -o dist/kaoud-hotel-amd64.exe .
+        env:
+          GOARCH: 'amd64'
+          CGO_ENABLED: '0'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kaoud-hotel-windows
+          path: apps/desktop/dist/*.exe
+          if-no-files-found: error

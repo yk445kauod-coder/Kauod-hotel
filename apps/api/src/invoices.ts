@@ -69,19 +69,56 @@ export interface CreateInvoiceInput extends InvoiceInput {
   issuerName?: string | null;
   issuerTaxId?: string | null;
   issuerAddress?: string | null;
+  serial?: number;
+  opId?: string;
+}
+
+// A device that reserved serial numbers may submit a serial inside its block.
+export async function findDeviceBlock(
+  db: Db, tenantId: string, serial: number,
+): Promise<{ device_id: string } | null> {
+  return db.one<{ device_id: string }>(
+    `SELECT device_id FROM device_serials
+     WHERE tenant_id = ? AND ? BETWEEN start_serial AND end_serial`,
+    [tenantId, serial],
+  );
+}
+
+export async function findOp(db: Db, tenantId: string, opId: string): Promise<{ entity_id: string } | null> {
+  return db.one<{ entity_id: string }>(
+    `SELECT entity_id FROM op_ids WHERE tenant_id = ? AND op_id = ?`, [tenantId, opId],
+  );
 }
 
 // Allocates the next serial atomically, computes totals with the shared engine,
 // and writes the invoice + its lines. The counter is advanced only on success.
 export async function createInvoice(
   db: Db, tenantId: string, userId: string, input: CreateInvoiceInput,
-): Promise<{ id: string; serial: number; calc: CalcResult }> {
+): Promise<{ id: string; serial: number; calc: CalcResult; deduped?: boolean }> {
   const settings = await loadSettings(db, tenantId);
   if (!settings) throw new Error('settings_missing');
   const counter = await loadCounter(db, tenantId);
   if (!counter) throw new Error('counter_missing');
 
-  const serial = counter.next_override && counter.next_override > 0 ? counter.next_override : counter.next_serial;
+  // Idempotency: an offline write replayed twice returns the original invoice.
+  if (input.opId) {
+    const existing = await findOp(db, tenantId, input.opId);
+    if (existing) {
+      const inv = await getInvoice(db, tenantId, existing.entity_id);
+      if (inv) return { id: inv.id, serial: inv.serial, calc: calcInvoice(input, effectiveTaxConfig(settings, input)), deduped: true };
+    }
+  }
+
+  // Serial: an offline client supplies one from its reserved block; otherwise
+  // the server allocates from the counter as before.
+  let serial: number;
+  if (input.serial !== undefined) {
+    const block = await findDeviceBlock(db, tenantId, input.serial);
+    if (!block) throw new Error('serial_not_reserved');
+    serial = input.serial;
+  } else {
+    serial = counter.next_override && counter.next_override > 0 ? counter.next_override : counter.next_serial;
+  }
   const calc = calcInvoice(input, effectiveTaxConfig(settings, input));
   const id = newId('inv');
   const now = new Date().toISOString();
@@ -114,11 +151,20 @@ export async function createInvoice(
     });
   });
 
-  // Advance the counter; clear a one-shot override.
-  statements.push({
-    sql: `UPDATE counters SET next_serial = ?, next_override = NULL WHERE tenant_id = ?`,
-    params: [serial + 1, tenantId],
-  });
+  // Advance the counter only when the server allocated the serial (an offline
+  // block serial does not touch it); clear a one-shot override.
+  if (input.serial === undefined) {
+    statements.push({
+      sql: `UPDATE counters SET next_serial = ?, next_override = NULL WHERE tenant_id = ?`,
+      params: [serial + 1, tenantId],
+    });
+  }
+  if (input.opId) {
+    statements.push({
+      sql: `INSERT OR IGNORE INTO op_ids (tenant_id, op_id, entity_id, created_at) VALUES (?, ?, ?, ?)`,
+      params: [tenantId, input.opId, id, now],
+    });
+  }
 
   await db.batch(statements);
   return { id, serial, calc };
