@@ -87,6 +87,7 @@ export interface OfflineCreateInput {
   receiverTaxId?: string; notes?: string; applyDiscount: boolean;
   vatRate?: number | null; discountRate?: number | null;
   issuerName?: string | null; issuerTaxId?: string | null; issuerAddress?: string | null;
+  paymentMethod?: string;
   lines: { description: string; qty: number; unitPrice: string; kind: 'room' | 'restaurant' | 'minibar' | 'laundry' | 'extra' }[];
 }
 

@@ -30,6 +30,8 @@ export const InvoiceInputSchema = z.object({
   issuerName: z.string().trim().max(200).nullable().optional(),
   issuerTaxId: z.string().trim().regex(/^\d{9}$/, 'must be exactly 9 digits').nullable().optional(),
   issuerAddress: z.string().trim().max(300).nullable().optional(),
+  // Intended payment method for the invoice (V15 parity). Defaults to cash.
+  paymentMethod: PaymentMethodSchema.optional().default('cash'),
 }).superRefine((v, ctx) => {
   if (v.checkIn && v.checkOut && Date.parse(v.checkOut) <= Date.parse(v.checkIn)) {
     ctx.addIssue({ code: 'custom', path: ['checkOut'], message: 'checkOut must be after checkIn' });

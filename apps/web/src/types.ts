@@ -6,7 +6,7 @@ export interface InvoiceSummary {
   id: string; serial: number; guest_name: string; room_number: string;
   check_in: string | null; check_out: string | null; status: 'draft' | 'open' | 'locked' | 'cancelled';
   issued_at: string; subtotal_net: string; subtotal_gross: string; tax_total: string;
-  discount: string; total: string; eta_status: string; created_at: string;
+  discount: string; total: string; eta_status: string; payment_method?: string; created_at: string;
 }
 
 export interface InvoiceLine {
@@ -19,6 +19,7 @@ export interface InvoiceFull extends Omit<InvoiceSummary, 'created_at'> {
   eta_submitted_at: string | null; eta_error: string | null;
   vat_rate: number | null; discount_rate: number | null;
   issuer_name: string | null; issuer_tax_id: string | null; issuer_address: string | null;
+  payment_method: string;
 }
 
 export interface Settings {

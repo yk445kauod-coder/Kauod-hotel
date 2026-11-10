@@ -202,6 +202,10 @@ export function PrintView({ invoiceId, onClose }: { invoiceId: string; onClose: 
                 <div className="inv-words-cap">المبلغ بالحروف / Amount in words</div>
                 <div className="inv-words-body">{data.totalInWords}</div>
               </div>
+              <div className="inv-words">
+                <div className="inv-words-cap">طريقة الدفع / Payment method</div>
+                <div className="inv-words-body">{PAY_LABEL[invoice.payment_method] ?? PAY_LABEL.cash}</div>
+              </div>
               {invoice.notes && (
                 <div className="inv-notes">
                   <div className="inv-words-cap">ملاحظات / Notes</div>

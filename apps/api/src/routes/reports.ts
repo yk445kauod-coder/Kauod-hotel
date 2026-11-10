@@ -102,6 +102,32 @@ reportRoutes.get('/api/reports/dashboard', requireAuth(), async (c) => {
   });
 });
 
+// Today's cash report: count + total for the day's valid invoices, broken down
+// by payment method (V15 parity: تقرير اليوم - الخزنة).
+reportRoutes.get('/api/reports/daily', requireAuth(), async (c) => {
+  const db = c.get('db');
+  const tenantId = c.get('auth').user.tenantId;
+  const day = c.req.query('date') ?? new Date().toISOString().slice(0, 10);
+  const row = await db.one<{ count: number; total: number }>(
+    `SELECT COUNT(*) AS count, COALESCE(SUM(CAST(total AS REAL)), 0) AS total
+       FROM invoices
+      WHERE tenant_id = ? AND status != 'cancelled' AND substr(issued_at, 1, 10) = ?`,
+    [tenantId, day]);
+  const byMethod = await db.all<{ method: string; count: number; total: number }>(
+    `SELECT COALESCE(NULLIF(payment_method, ''), 'cash') AS method,
+            COUNT(*) AS count, COALESCE(SUM(CAST(total AS REAL)), 0) AS total
+       FROM invoices
+      WHERE tenant_id = ? AND status != 'cancelled' AND substr(issued_at, 1, 10) = ?
+      GROUP BY method ORDER BY total DESC`,
+    [tenantId, day]);
+  return c.json({
+    date: day,
+    count: row?.count ?? 0,
+    total: Number(row?.total ?? 0).toFixed(2),
+    byMethod: byMethod.map((m) => ({ method: m.method, count: m.count, total: Number(m.total).toFixed(2) })),
+  });
+});
+
 // Register: every invoice with a per-kind gross breakdown (room / restaurant /
 // services / extra) so the on-screen register can be exported as Excel/CSV.
 reportRoutes.get('/api/reports/register', requireAuth(), requireRole('admin', 'manager', 'accountant'), async (c) => {
@@ -124,10 +150,11 @@ reportRoutes.get('/api/reports/register', requireAuth(), requireRole('admin', 'm
     id: string; serial: number; issued_at: string; guest_name: string; room_number: string;
     check_in: string | null; check_out: string | null; status: string;
     subtotal_gross: string; subtotal_net: string; tax_total: string; discount: string; total: string;
+    payment_method: string;
     stay: number; restaurant: number; services: number; extra: number;
   }>(
     `SELECT i.id, i.serial, i.issued_at, i.guest_name, i.room_number, i.check_in, i.check_out, i.status,
-            i.subtotal_gross, i.subtotal_net, i.tax_total, i.discount, i.total,
+            i.subtotal_gross, i.subtotal_net, i.tax_total, i.discount, i.total, i.payment_method,
             COALESCE(SUM(CASE WHEN l.kind = 'room' THEN CAST(l.gross AS REAL) ELSE 0 END), 0) AS stay,
             COALESCE(SUM(CASE WHEN l.kind = 'restaurant' THEN CAST(l.gross AS REAL) ELSE 0 END), 0) AS restaurant,
             COALESCE(SUM(CASE WHEN l.kind IN ('minibar','laundry') THEN CAST(l.gross AS REAL) ELSE 0 END), 0) AS services,
@@ -140,7 +167,7 @@ reportRoutes.get('/api/reports/register', requireAuth(), requireRole('admin', 'm
   return c.json({
     rows: rows.map((r) => ({
       id: r.id, serial: r.serial, issuedAt: r.issued_at, guest: r.guest_name, room: r.room_number,
-      checkIn: r.check_in, checkOut: r.check_out, status: r.status,
+      checkIn: r.check_in, checkOut: r.check_out, status: r.status, paymentMethod: r.payment_method,
       stay: Number(r.stay).toFixed(2), restaurant: Number(r.restaurant).toFixed(2),
       services: Number(r.services).toFixed(2), extra: Number(r.extra).toFixed(2),
       subtotal: Number(r.subtotal_gross).toFixed(2), net: Number(r.subtotal_net).toFixed(2),

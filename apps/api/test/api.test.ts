@@ -342,4 +342,48 @@ describe('API integration', () => {
     expect(b.invoice.id).toBe(a.invoice.id);
     expect(b.invoice.serial).toBe(a.invoice.serial);
   });
+
+  it('stores and returns the invoice payment method', async () => {
+    const ctx = await sharedCtx();
+    const res = await req('/api/invoices', { method: 'POST', body: JSON.stringify({
+      guestName: 'pay-guest', paymentMethod: 'card', lines: [{ description: 'x', qty: 1, unitPrice: 100 }],
+    }) }, ctx);
+    expect(res.status).toBe(201);
+    const body = await res.json() as { invoice: { id: string; payment_method: string } };
+    expect(body.invoice.payment_method).toBe('card');
+
+    // Default is cash when omitted.
+    const res2 = await req('/api/invoices', { method: 'POST', body: JSON.stringify({
+      guestName: 'pay-default', lines: [{ description: 'x', qty: 1, unitPrice: 100 }],
+    }) }, ctx);
+    const body2 = await res2.json() as { invoice: { payment_method: string } };
+    expect(body2.invoice.payment_method).toBe('cash');
+
+    // A bogus method is rejected by the schema.
+    const bad = await req('/api/invoices', { method: 'POST', body: JSON.stringify({
+      guestName: 'pay-bad', paymentMethod: 'bitcoin', lines: [{ description: 'x', qty: 1, unitPrice: 100 }],
+    }) }, ctx);
+    expect(bad.status).toBe(400);
+  });
+
+  it('reports the daily cash report with a payment-method breakdown', async () => {
+    const ctx = await sharedCtx();
+    const res = await req('/api/reports/daily', {}, ctx);
+    expect(res.status).toBe(200);
+    const body = await res.json() as { date: string; count: number; total: string; byMethod: { method: string }[] };
+    expect(typeof body.date).toBe('string');
+    expect(body.count).toBeGreaterThan(0);
+    expect(Array.isArray(body.byMethod)).toBe(true);
+  });
+
+  it('summarises per-user activity for monitoring', async () => {
+    const ctx = await sharedCtx();
+    const res = await req('/api/monitor/users', {}, ctx);
+    expect(res.status).toBe(200);
+    const body = await res.json() as { users: { username: string; invoices: number; logins: number }[] };
+    const owner = body.users.find((u) => u.username === 'owner');
+    expect(owner).toBeTruthy();
+    // The owner created invoices earlier in this suite.
+    expect(owner!.invoices).toBeGreaterThan(0);
+  });
 });

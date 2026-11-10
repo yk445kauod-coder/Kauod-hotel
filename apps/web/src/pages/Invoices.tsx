@@ -126,8 +126,8 @@ export function Invoices({ user, settings, onPrint, openNewSignal = 0, offline =
   function exportRegisterExcel() {
     exportExcel({
       title: 'فندق قاعود سبورتنج — سجل الفواتير',
-      headers: ['رقم', 'النزيل', 'الغرفة', 'الدخول', 'الخروج', 'صافي', 'ضريبة', 'الإجمالي', 'الحالة'],
-      rows: list.map((i) => [i.serial, i.guest_name, i.room_number || '', i.check_in ?? '', i.check_out ?? '', i.subtotal_net, i.tax_total, i.total, STATUS_LABEL[i.status] ?? i.status]),
+      headers: ['رقم', 'النزيل', 'الغرفة', 'الدخول', 'الخروج', 'الدفع', 'صافي', 'ضريبة', 'الإجمالي', 'الحالة'],
+      rows: list.map((i) => [i.serial, i.guest_name, i.room_number || '', i.check_in ?? '', i.check_out ?? '', PAY_LABEL[i.payment_method ?? 'cash'] ?? 'نقدي', i.subtotal_net, i.tax_total, i.total, STATUS_LABEL[i.status] ?? i.status]),
       filename: 'kaoud-invoices.xls',
     });
   }
@@ -198,11 +198,11 @@ export function Invoices({ user, settings, onPrint, openNewSignal = 0, offline =
             <tr>
               <th>رقم</th><th>النزيل</th><th>الغرفة</th><th>الدخول</th><th>الخروج</th>
               <th className="num">صافي</th><th className="num">ضريبة</th><th className="num">الإجمالي</th>
-              <th>الحالة</th><th>الضرائب</th><th></th>
+              <th>الدفع</th><th>الحالة</th><th>الضرائب</th><th></th>
             </tr>
           </thead>
           <tbody>
-            {list.length === 0 && <tr><td colSpan={11} className="muted">لا نتائج</td></tr>}
+            {list.length === 0 && <tr><td colSpan={12} className="muted">لا نتائج</td></tr>}
             {list.map((inv) => (
               <tr key={inv.id}>
                 <td className="mono" data-label="رقم">{inv.serial}</td>
@@ -213,6 +213,7 @@ export function Invoices({ user, settings, onPrint, openNewSignal = 0, offline =
                 <td className="num" data-label="صافي">{egp(inv.subtotal_net)}</td>
                 <td className="num" data-label="ضريبة">{egp(inv.tax_total)}</td>
                 <td className="num" data-label="الإجمالي"><strong>{egp(inv.total)}</strong></td>
+                <td data-label="الدفع">{PAY_LABEL[inv.payment_method ?? 'cash'] ?? 'نقدي'}</td>
                 <td data-label="الحالة"><span className={`badge ${inv.status}`}>{STATUS_LABEL[inv.status]}</span></td>
                 <td data-label="الضرائب"><span className="badge eta">{ETA_LABEL[inv.eta_status] ?? inv.eta_status}</span></td>
                 <td data-label="">
@@ -265,6 +266,7 @@ interface DraftState {
   guestName: string; roomNumber: string; checkIn: string; checkOut: string;
   receiverTaxId: string; notes: string; applyDiscount: boolean; lines: DraftLine[];
   vatRate: string; discountRate: string; issuerName: string; issuerTaxId: string; issuerAddress: string;
+  paymentMethod: string;
 }
 
 function blankDraft(settings: Settings | null): DraftState {
@@ -274,6 +276,7 @@ function blankDraft(settings: Settings | null): DraftState {
     applyDiscount: (settings?.discount_rate ?? 0) > 0,
     lines: [{ description: '', qty: 1, unitPrice: '', kind: 'room' }],
     vatRate: '', discountRate: '', issuerName: '', issuerTaxId: '', issuerAddress: '',
+    paymentMethod: 'cash',
   };
 }
 
@@ -291,6 +294,7 @@ async function openEdit(id: string, setEditing: (v: { id: string; draft: DraftSt
       lines: r.lines.map((l) => ({ description: l.description, qty: l.qty, unitPrice: l.unit_price, kind: l.kind })),
       vatRate: opt(iv.vat_rate), discountRate: opt(iv.discount_rate),
       issuerName: iv.issuer_name ?? '', issuerTaxId: iv.issuer_tax_id ?? '', issuerAddress: iv.issuer_address ?? '',
+      paymentMethod: iv.payment_method || 'cash',
     },
   });
 }
@@ -346,6 +350,7 @@ function InvoiceEditor({ user, settings, id, initial, onClose, onSaved, offline 
           vatRate: optNum(draft.vatRate) ?? null, discountRate: optNum(draft.discountRate) ?? null,
           issuerName: draft.issuerName.trim() || null, issuerTaxId: draft.issuerTaxId.trim() || null,
           issuerAddress: draft.issuerAddress.trim() || null,
+          paymentMethod: draft.paymentMethod,
           lines,
         });
         onSaved();
@@ -364,6 +369,7 @@ function InvoiceEditor({ user, settings, id, initial, onClose, onSaved, offline 
         issuerName: draft.issuerName.trim() || null,
         issuerTaxId: draft.issuerTaxId.trim() || null,
         issuerAddress: draft.issuerAddress.trim() || null,
+        paymentMethod: draft.paymentMethod,
         lines,
       };
       if (id) await api.put(`/api/invoices/${id}`, body);
@@ -401,6 +407,15 @@ function InvoiceEditor({ user, settings, id, initial, onClose, onSaved, offline 
         <label className="field">تاريخ الدخول<input type="date" value={draft.checkIn} onChange={(e) => setDraft({ ...draft, checkIn: e.target.value })} /></label>
         <label className="field">تاريخ الخروج<input type="date" value={draft.checkOut} onChange={(e) => setDraft({ ...draft, checkOut: e.target.value })} /></label>
         <label className="field">عدد الليالي<input value={nights} readOnly dir="ltr" /></label>
+        <label className="field">طريقة الدفع
+          <select value={draft.paymentMethod} onChange={(e) => setDraft({ ...draft, paymentMethod: e.target.value })}>
+            <option value="cash">نقدي</option>
+            <option value="card">فيزا / بطاقة</option>
+            <option value="bank_transfer">تحويل بنكي</option>
+            <option value="instapay">إنستاباي</option>
+            <option value="other">آجل / شركات</option>
+          </select>
+        </label>
       </div>
 
       <div style={{ marginTop: 14 }}>

@@ -17,7 +17,7 @@ import { clientIp } from '../http.js';
 export const invoiceRoutes = new Hono<{ Bindings: Env }>();
 
 const LIST_COLS = `id, serial, guest_name, room_number, check_in, check_out, status, issued_at,
-  subtotal_net, subtotal_gross, tax_total, discount, total, eta_status, created_at`;
+  subtotal_net, subtotal_gross, tax_total, discount, total, eta_status, payment_method, created_at`;
 
 invoiceRoutes.get('/api/invoices', requireAuth(), async (c) => {
   const db = c.get('db');
@@ -109,12 +109,14 @@ invoiceRoutes.put('/api/invoices/:id', requireAuth(), requireRole('admin', 'mana
     {
       sql: `UPDATE invoices SET guest_name = ?, room_number = ?, check_in = ?, check_out = ?,
               subtotal_net = ?, subtotal_gross = ?, tax_total = ?, discount = ?, total = ?, notes = ?,
-              vat_rate = ?, discount_rate = ?, issuer_name = ?, issuer_tax_id = ?, issuer_address = ?, updated_at = ?
+              vat_rate = ?, discount_rate = ?, issuer_name = ?, issuer_tax_id = ?, issuer_address = ?,
+              payment_method = ?, updated_at = ?
             WHERE id = ? AND tenant_id = ?`,
       params: [parsed.data.guestName, parsed.data.roomNumber ?? '', parsed.data.checkIn ?? null, parsed.data.checkOut ?? null,
         calc.subtotalNet, calc.subtotalGross, calc.taxTotal, calc.discount, calc.total, parsed.data.notes ?? '',
         parsed.data.vatRate ?? null, parsed.data.discountRate ?? null,
         parsed.data.issuerName ?? null, parsed.data.issuerTaxId ?? null, parsed.data.issuerAddress ?? null,
+        parsed.data.paymentMethod ?? 'cash',
         now, inv.id, tenantId],
     },
   ];

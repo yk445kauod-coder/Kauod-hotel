@@ -11,12 +11,15 @@ import { SerialPage } from './pages/Serial';
 import { ReportsPage } from './pages/Reports';
 import { DirectoryPage } from './pages/Directory';
 import { AuditPage } from './pages/Audit';
+import { MonitoringPage } from './pages/Monitoring';
 import { ROLE_LABEL } from './format';
 import { useTheme } from './theme';
 import { useOfflineSync } from './useOffline';
 import { isOfflineEnabled, setOfflineEnabled, reserveBlock, getBlock, setBlock, cacheSettings } from './offline';
+import { DynamicIsland } from './components/DynamicIsland';
+import { downloadJson } from './exports';
 
-type Tab = 'dashboard' | 'invoices' | 'reports' | 'directory' | 'serial' | 'users' | 'settings' | 'audit';
+type Tab = 'dashboard' | 'invoices' | 'reports' | 'directory' | 'serial' | 'users' | 'monitor' | 'settings' | 'audit';
 
 const NAV: { id: Tab; label: string; ico: string; roles?: SessionUser['role'][] }[] = [
   { id: 'dashboard', label: 'لوحة التحكم', ico: '▤' },
@@ -25,6 +28,7 @@ const NAV: { id: Tab; label: string; ico: string; roles?: SessionUser['role'][] 
   { id: 'directory', label: 'الغرف والنزلاء', ico: '🏨' },
   { id: 'serial', label: 'أرقام الفواتير', ico: '#️⃣', roles: ['admin', 'manager'] },
   { id: 'users', label: 'المستخدمون', ico: '👥', roles: ['admin', 'manager'] },
+  { id: 'monitor', label: 'مراقبة المستخدمين', ico: '🕵️', roles: ['admin', 'manager'] },
   { id: 'settings', label: 'الإعدادات', ico: '⚙️', roles: ['admin', 'manager'] },
   { id: 'audit', label: 'سجل النشاط', ico: '📜', roles: ['admin'] },
 ];
@@ -66,6 +70,17 @@ export function App() {
   }, [offlineMode, sync]);
 
   const onSynced = useCallback(() => { refreshPending(); }, [refreshPending]);
+
+  // Island macro: download a full JSON backup (admin only, same payload as Settings).
+  const downloadBackup = useCallback(async () => {
+    try {
+      const data = await api.get<unknown>('/api/export');
+      const stamp = new Date().toISOString().slice(0, 10);
+      downloadJson(`kaoud-backup-${stamp}.json`, data);
+    } catch { setError('تعذّر إنشاء النسخة الاحتياطية'); }
+  }, []);
+
+  const openNewInvoice = useCallback(() => { setTab('invoices'); setNewInvoiceSignal((n) => n + 1); }, []);
 
   useEffect(() => {
     (async () => {
@@ -194,12 +209,29 @@ export function App() {
           {tab === 'directory' && <DirectoryPage user={user} />}
           {tab === 'serial' && <SerialPage user={user} />}
           {tab === 'users' && <UsersPage user={user} />}
+          {tab === 'monitor' && <MonitoringPage />}
           {tab === 'settings' && <SettingsPage user={user} onSaved={loadSettings} />}
           {tab === 'audit' && <AuditPage />}
         </div>
       </main>
 
-      <nav className="bottom-nav no-print" aria-label="التنقل السريع">
+        <DynamicIsland
+          user={user}
+          activeTab={tab}
+          online={online}
+          pending={pending}
+          syncing={syncing}
+          shortcuts={nav.map((n) => ({ id: n.id, label: n.label, ico: n.ico }))}
+          onNavigate={(id) => setTab(id as Tab)}
+          onNewInvoice={openNewInvoice}
+          onSync={() => sync()}
+          onBackup={downloadBackup}
+          onTodayReport={() => setTab('dashboard')}
+          onToggleTheme={toggleTheme}
+          onLogout={onLogout}
+        />
+
+        <nav className="bottom-nav no-print" aria-label="التنقل السريع">
         <div className="bn-side">
           {bnRight.map((b) => (
             <button key={b.id} className={`bn-item ${tab === b.id ? 'active' : ''}`} onClick={() => { setTab(b.id); setNavOpen(false); }}>

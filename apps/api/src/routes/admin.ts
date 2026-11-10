@@ -214,6 +214,42 @@ adminRoutes.get('/api/audit', requireAuth(), requireRole('admin'), async (c) => 
   return c.json({ entries: rows });
 });
 
+// ---------- user monitoring (V15 parity: مراقبة المستخدمين) ----------
+// Per-user activity derived from the audit trail: how many logins, invoices,
+// locks, cancellations and payments each user performed, plus last activity.
+adminRoutes.get('/api/monitor/users', requireAuth(), requireRole('admin', 'manager'), async (c) => {
+  const db = c.get('db');
+  const tenantId = c.get('auth').user.tenantId;
+  const users = await db.all<{ id: string; username: string; name: string; role: string; active: number }>(
+    `SELECT id, username, name, role, active FROM users WHERE tenant_id = ? ORDER BY name`, [tenantId]);
+  const agg = await db.all<{
+    user_id: string | null; total: number; logins: number; invoices: number;
+    locks: number; cancels: number; payments: number; last_at: string | null;
+  }>(
+    `SELECT user_id,
+            COUNT(*) AS total,
+            SUM(CASE WHEN action = 'login' THEN 1 ELSE 0 END) AS logins,
+            SUM(CASE WHEN action = 'invoice.create' THEN 1 ELSE 0 END) AS invoices,
+            SUM(CASE WHEN action IN ('invoice.lock','invoice.unlock') THEN 1 ELSE 0 END) AS locks,
+            SUM(CASE WHEN action = 'invoice.cancel' THEN 1 ELSE 0 END) AS cancels,
+            SUM(CASE WHEN action = 'payment.create' THEN 1 ELSE 0 END) AS payments,
+            MAX(created_at) AS last_at
+       FROM audit_log WHERE tenant_id = ? GROUP BY user_id`,
+    [tenantId]);
+  const byUser = new Map(agg.map((a) => [a.user_id ?? '', a]));
+  return c.json({
+    users: users.map((u) => {
+      const a = byUser.get(u.id);
+      return {
+        id: u.id, username: u.username, name: u.name, role: u.role, active: !!u.active,
+        total: a?.total ?? 0, logins: a?.logins ?? 0, invoices: a?.invoices ?? 0,
+        locks: a?.locks ?? 0, cancels: a?.cancels ?? 0, payments: a?.payments ?? 0,
+        lastAt: a?.last_at ?? null,
+      };
+    }),
+  });
+});
+
 // ---------- full tenant data export (backup) ----------
 adminRoutes.get('/api/export', requireAuth(), requireRole('admin'), async (c) => {
   const db = c.get('db');
@@ -239,7 +275,7 @@ adminRoutes.get('/api/export', requireAuth(), requireRole('admin'), async (c) =>
 interface Backup { version?: number; settings?: Record<string, unknown>; counter?: Record<string, unknown>; invoices?: unknown[]; lines?: unknown[]; payments?: unknown[]; rooms?: unknown[]; guests?: unknown[]; reservations?: unknown[]; }
 
 const SETTINGS_COLS = ['hotel_name', 'hotel_name_en', 'tax_registration_number', 'commercial_register', 'activity_code', 'address', 'city', 'phone', 'email', 'vat_rate', 'discount_rate', 'prices_include_tax', 'serial_start', 'currency', 'logo_data', 'signature_left', 'signature_right', 'footer_note'];
-const INVOICE_COLS = ['id', 'serial', 'uuid', 'guest_id', 'guest_name', 'receiver_tax_id', 'room_number', 'check_in', 'check_out', 'status', 'issued_at', 'subtotal_net', 'subtotal_gross', 'tax_total', 'discount', 'total', 'notes', 'eta_uuid', 'eta_status', 'eta_submitted_at', 'eta_error', 'created_by', 'created_at', 'updated_at', 'locked_at', 'cancelled_at'];
+const INVOICE_COLS = ['id', 'serial', 'uuid', 'guest_id', 'guest_name', 'receiver_tax_id', 'room_number', 'check_in', 'check_out', 'status', 'issued_at', 'subtotal_net', 'subtotal_gross', 'tax_total', 'discount', 'total', 'notes', 'vat_rate', 'discount_rate', 'issuer_name', 'issuer_tax_id', 'issuer_address', 'payment_method', 'eta_uuid', 'eta_status', 'eta_submitted_at', 'eta_error', 'created_by', 'created_at', 'updated_at', 'locked_at', 'cancelled_at'];
 const LINE_COLS = ['id', 'invoice_id', 'description', 'qty', 'unit_price', 'kind', 'gross', 'net', 'tax', 'position'];
 const PAYMENT_COLS = ['id', 'invoice_id', 'amount', 'method', 'reference', 'paid_at', 'created_by', 'created_at'];
 const ROOM_COLS = ['id', 'number', 'type', 'nightly_rate', 'capacity', 'active'];

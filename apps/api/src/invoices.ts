@@ -28,6 +28,7 @@ export interface InvoiceRecord {
   issuer_name: string | null;
   issuer_tax_id: string | null;
   issuer_address: string | null;
+  payment_method: string;
   eta_uuid: string | null;
   eta_status: string;
   eta_submitted_at: string | null;
@@ -69,6 +70,7 @@ export interface CreateInvoiceInput extends InvoiceInput {
   issuerName?: string | null;
   issuerTaxId?: string | null;
   issuerAddress?: string | null;
+  paymentMethod?: string;
   serial?: number;
   opId?: string;
 }
@@ -129,15 +131,16 @@ export async function createInvoice(
       sql: `INSERT INTO invoices
         (id, tenant_id, serial, uuid, guest_id, guest_name, receiver_tax_id, room_number, check_in, check_out,
          status, issued_at, subtotal_net, subtotal_gross, tax_total, discount, total, notes,
-         vat_rate, discount_rate, issuer_name, issuer_tax_id, issuer_address,
+         vat_rate, discount_rate, issuer_name, issuer_tax_id, issuer_address, payment_method,
          eta_uuid, eta_status, created_by, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unconfigured', ?, ?, ?)`,
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unconfigured', ?, ?, ?)`,
       params: [
         id, tenantId, serial, uuid, input.guestId ?? null, input.guestName, input.receiverTaxId ?? '',
         input.roomNumber ?? '', input.checkIn ?? null, input.checkOut ?? null,
         etaDateTime(), calc.subtotalNet, calc.subtotalGross, calc.taxTotal, calc.discount, calc.total,
         input.notes ?? '', input.vatRate ?? null, input.discountRate ?? null,
         input.issuerName ?? null, input.issuerTaxId ?? null, input.issuerAddress ?? null,
+        input.paymentMethod ?? 'cash',
         uuid, userId, now, now,
       ],
     },
