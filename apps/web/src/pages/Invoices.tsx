@@ -8,7 +8,7 @@ interface DraftLine { description: string; qty: number; unitPrice: string; kind:
 
 const KIND_LABEL: Record<string, string> = { room: 'إقامة', restaurant: 'مطعم', minibar: 'ميني بار', laundry: 'مغسلة', other: 'أخرى', extra: 'إضافي' };
 
-export function Invoices({ user, settings, onPrint }: { user: SessionUser; settings: Settings | null; onPrint: (id: string) => void }) {
+export function Invoices({ user, settings, onPrint, openNewSignal = 0 }: { user: SessionUser; settings: Settings | null; onPrint: (id: string) => void; openNewSignal?: number }) {
   const canWrite = ['admin', 'manager', 'reception'].includes(user.role);
   const [list, setList] = useState<InvoiceSummary[]>([]);
   const [total, setTotal] = useState(0);
@@ -31,6 +31,12 @@ export function Invoices({ user, settings, onPrint }: { user: SessionUser; setti
   }, [q, status, offset]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Open the "new invoice" editor when the shell bumps the signal (FAB / hero button).
+  useEffect(() => {
+    if (openNewSignal > 0 && canWrite) setEditing({ draft: blankDraft(settings) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openNewSignal]);
 
   return (
     <>

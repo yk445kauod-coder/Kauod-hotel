@@ -62,6 +62,46 @@ reportRoutes.get('/api/reports/revenue', requireAuth(), requireRole('admin', 'ma
   return c.json({ group, rows: rows.map((r: Record<string, unknown>) => ({ ...r, total: Number(r.total).toFixed(2), tax: Number(r.tax).toFixed(2) })) });
 });
 
+// Dashboard charts data: a 14-day revenue trend and the top rooms by revenue.
+reportRoutes.get('/api/reports/dashboard', requireAuth(), async (c) => {
+  const db = c.get('db');
+  const tenantId = c.get('auth').user.tenantId;
+
+  const trend = await db.all<{ day: string; total: number; count: number }>(
+    `SELECT substr(issued_at, 1, 10) AS day,
+            COALESCE(SUM(CAST(total AS REAL)), 0) AS total,
+            COUNT(*) AS count
+       FROM invoices
+      WHERE tenant_id = ? AND status != 'cancelled'
+        AND substr(issued_at, 1, 10) >= date('now', '-13 days')
+      GROUP BY day ORDER BY day`,
+    [tenantId]);
+
+  const topRooms = await db.all<{ room: string; total: number; count: number }>(
+    `SELECT room_number AS room,
+            COALESCE(SUM(CAST(total AS REAL)), 0) AS total,
+            COUNT(*) AS count
+       FROM invoices
+      WHERE tenant_id = ? AND status != 'cancelled' AND room_number != ''
+      GROUP BY room_number ORDER BY total DESC LIMIT 6`,
+    [tenantId]);
+
+  // Fill the 14-day window so the chart has no gaps.
+  const byDay = new Map(trend.map((r) => [r.day, r]));
+  const days: { day: string; total: string; count: number }[] = [];
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date(); d.setUTCDate(d.getUTCDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    const r = byDay.get(key);
+    days.push({ day: key, total: Number(r?.total ?? 0).toFixed(2), count: r?.count ?? 0 });
+  }
+
+  return c.json({
+    trend: days,
+    topRooms: topRooms.map((r) => ({ room: r.room, total: Number(r.total).toFixed(2), count: r.count })),
+  });
+});
+
 // VAT return figures for a period (for the accountant / ETA filing).
 reportRoutes.get('/api/reports/vat', requireAuth(), requireRole('admin', 'manager', 'accountant'), async (c) => {
   const db = c.get('db');

@@ -34,6 +34,7 @@ export function App() {
   const [tab, setTab] = useState<Tab>('dashboard');
   const [printId, setPrintId] = useState<string | null>(null);
   const [navOpen, setNavOpen] = useState(false);
+  const [newInvoiceSignal, setNewInvoiceSignal] = useState(0);
   const [error, setError] = useState('');
   const { theme, toggle: toggleTheme } = useTheme();
 
@@ -78,6 +79,14 @@ export function App() {
 
   const nav = NAV.filter((n) => !n.roles || n.roles.includes(user.role));
   const hotelName = settings?.hotel_name ?? 'فندق قاعود سبورتنج';
+  const canWrite = ['admin', 'manager', 'reception'].includes(user.role);
+  const bottomDefs: { id: Tab; label: string; ico: string }[] = [
+    { id: 'dashboard', label: 'الرئيسية', ico: '▤' },
+    { id: 'invoices', label: 'الفواتير', ico: '🧾' },
+    { id: 'reports', label: 'التقارير', ico: '📊' },
+    { id: 'directory', label: 'الغرف', ico: '🏨' },
+  ];
+  const bottomItems = bottomDefs.filter((b) => nav.some((n) => n.id === b.id));
 
   return (
     <div className="app">
@@ -134,8 +143,8 @@ export function App() {
         </header>
         <div className="content no-print">
           {error && <div className="alert err">{error}</div>}
-          {tab === 'dashboard' && <Dashboard user={user} onOpenInvoice={(id) => { setPrintId(id); }} />}
-          {tab === 'invoices' && <Invoices user={user} settings={settings} onPrint={(id) => setPrintId(id)} />}
+          {tab === 'dashboard' && <Dashboard user={user} onOpenInvoice={(id) => { setPrintId(id); }} onNewInvoice={() => { setTab('invoices'); setNewInvoiceSignal((n) => n + 1); }} />}
+          {tab === 'invoices' && <Invoices user={user} settings={settings} onPrint={(id) => setPrintId(id)} openNewSignal={newInvoiceSignal} />}
           {tab === 'reports' && <ReportsPage />}
           {tab === 'directory' && <DirectoryPage user={user} />}
           {tab === 'serial' && <SerialPage user={user} />}
@@ -144,6 +153,24 @@ export function App() {
           {tab === 'audit' && <AuditPage />}
         </div>
       </main>
+
+      <nav className="bottom-nav no-print" aria-label="التنقل السريع">
+        {bottomItems.map((b) => (
+          <button key={b.id} className={`bn-item ${tab === b.id ? 'active' : ''}`} onClick={() => { setTab(b.id); setNavOpen(false); }}>
+            <span className="bn-ico">{b.ico}</span>
+            <span className="bn-lbl">{b.label}</span>
+          </button>
+        ))}
+        {canWrite && (
+          <button className="bn-item bn-fab" onClick={() => { setTab('invoices'); setNewInvoiceSignal((n) => n + 1); setNavOpen(false); }} aria-label="فاتورة جديدة">
+            <span className="bn-fab-ico">+</span>
+          </button>
+        )}
+        <button className={`bn-item ${navOpen ? 'active' : ''}`} onClick={() => setNavOpen((v) => !v)} aria-label="المزيد" aria-expanded={navOpen}>
+          <span className="bn-ico">☰</span>
+          <span className="bn-lbl">المزيد</span>
+        </button>
+      </nav>
     </div>
   );
 }
