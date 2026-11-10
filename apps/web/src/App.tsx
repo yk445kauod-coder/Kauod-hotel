@@ -17,7 +17,9 @@ import { useTheme } from './theme';
 import { useOfflineSync } from './useOffline';
 import { isOfflineEnabled, setOfflineEnabled, reserveBlock, getBlock, setBlock, cacheSettings, pendingCount } from './offline';
 import { pendingOps } from './outbox';
-import { DynamicIsland } from './components/DynamicIsland';
+import { QuickCenter } from './components/QuickCenter';
+import { Guide } from './components/Guide';
+import { TopHints } from './components/TopHints';
 import { downloadJson } from './exports';
 
 type Tab = 'dashboard' | 'invoices' | 'reports' | 'directory' | 'serial' | 'users' | 'monitor' | 'settings' | 'audit';
@@ -44,6 +46,7 @@ export function App() {
   const [newInvoiceSignal, setNewInvoiceSignal] = useState(0);
   const [error, setError] = useState('');
   const [offlineMode, setOfflineMode] = useState(isOfflineEnabled());
+  const [guideOpen, setGuideOpen] = useState(false);
   const { theme, toggle: toggleTheme } = useTheme();
   const { online, pending, syncing, sync, refreshPending } = useOfflineSync();
 
@@ -72,7 +75,7 @@ export function App() {
 
   const onSynced = useCallback(() => { refreshPending(); }, [refreshPending]);
 
-  // Island macro: download a full JSON backup (admin only, same payload as Settings).
+  // Quick center action: download a full JSON backup (admin only, same payload as Settings).
   const downloadBackup = useCallback(async () => {
     try {
       const data = await api.get<unknown>('/api/export');
@@ -103,6 +106,29 @@ export function App() {
     document.body.style.overflow = 'hidden';
     return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = ''; };
   }, [navOpen]);
+
+  // Summon the guide from anywhere with "?" (Shift + /).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      const typing = el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
+      if (typing) return;
+      if (e.key === '?') { e.preventDefault(); setGuideOpen(true); }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
+
+  // Show the guide once on a device's first login, then never auto-open again.
+  useEffect(() => {
+    if (!user) return;
+    try {
+      if (localStorage.getItem('kaoud.guide.seen') !== '1') {
+        setGuideOpen(true);
+        localStorage.setItem('kaoud.guide.seen', '1');
+      }
+    } catch { /* ignore */ }
+  }, [user]);
 
   const onLogin = async (u: SessionUser) => { setUser(u); await loadSettings(); setTab('dashboard'); };
   const onLogout = async () => {
@@ -206,6 +232,15 @@ export function App() {
             <span className="muted">{settings?.hotel_name ?? ''}</span>
             <button
               className="btn ghost"
+              onClick={() => setGuideOpen(true)}
+              title="الدليل السريع (؟)"
+              aria-label="فتح الدليل السريع"
+              style={{ padding: '7px 10px', fontSize: 16 }}
+            >
+              ❓
+            </button>
+            <button
+              className="btn ghost"
               onClick={toggleTheme}
               title={theme === 'dark' ? 'الوضع الفاتح' : 'الوضع الداكن'}
               aria-label={theme === 'dark' ? 'الوضع الفاتح' : 'الوضع الداكن'}
@@ -217,6 +252,7 @@ export function App() {
         </header>
         <div className="content no-print">
           {error && <div className="alert err">{error}</div>}
+          <TopHints onOpenGuide={() => setGuideOpen(true)} />
           {tab === 'dashboard' && <Dashboard user={user} onOpenInvoice={(id) => { setPrintId(id); }} onNewInvoice={() => { setTab('invoices'); setNewInvoiceSignal((n) => n + 1); }} />}
           {tab === 'invoices' && <Invoices user={user} settings={settings} onPrint={(id) => setPrintId(id)} openNewSignal={newInvoiceSignal} offline={offlineMode} online={online} onQueued={onSynced} />}
           {tab === 'reports' && <ReportsPage />}
@@ -229,7 +265,7 @@ export function App() {
         </div>
       </main>
 
-        <DynamicIsland
+        <QuickCenter
           user={user}
           activeTab={tab}
           online={online}
@@ -242,8 +278,11 @@ export function App() {
           onBackup={downloadBackup}
           onTodayReport={() => setTab('dashboard')}
           onToggleTheme={toggleTheme}
+          onOpenGuide={() => setGuideOpen(true)}
           onLogout={onLogout}
         />
+
+        <Guide open={guideOpen} onClose={() => setGuideOpen(false)} user={user} />
 
         <nav className="bottom-nav no-print" aria-label="التنقل السريع">
         <div className="bn-side">

@@ -74,7 +74,7 @@ export function DirectoryPage({ user }: { user: SessionUser }) {
         <table data-mobile="cards">
           <thead><tr><th>الرقم</th><th>النوع</th><th className="num">سعر الليلة</th><th className="num">السعة</th><th>الحالة</th></tr></thead>
           <tbody>
-            {rooms.length === 0 && <tr><td colSpan={5} className="muted">لا توجد غرف</td></tr>}
+            {rooms.length === 0 && <tr><td colSpan={5} className="muted">لا توجد غرف بعد — أضف غرفك من النموذج بالأعلى. الأرقام اللي تكتبها هي اللي هتظهر في الفواتير.</td></tr>}
             {rooms.map((r) => (
               <tr key={r.id}><td className="mono" data-label="الرقم">{r.number}</td><td data-label="النوع">{r.type}</td><td className="num" data-label="سعر الليلة">{egp(r.nightly_rate)}</td><td className="num" data-label="السعة">{r.capacity}</td>
                 <td data-label="الحالة">{r.active ? <span className="badge locked">مفعّلة</span> : <span className="badge cancelled">معطّلة</span>}</td></tr>
