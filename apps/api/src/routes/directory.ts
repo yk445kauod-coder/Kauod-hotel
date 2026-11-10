@@ -19,7 +19,7 @@ directoryRoutes.post('/api/rooms', requireAuth(), requireRole('admin', 'manager'
   const { tenantId, id: userId } = c.get('auth').user;
   const parsed = RoomSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: 'bad_request', details: parsed.error.issues }, 400);
-  const id = newId('room');
+  const id = parsed.data.id ?? newId('room');
   await db.run(
     `INSERT INTO rooms (id, tenant_id, number, type, nightly_rate, capacity, active) VALUES (?, ?, ?, ?, ?, ?, ?)`,
     [id, tenantId, parsed.data.number, parsed.data.type ?? '', parsed.data.nightlyRate.toFixed(2), parsed.data.capacity ?? 2, parsed.data.active ? 1 : 0]);
@@ -69,7 +69,7 @@ directoryRoutes.post('/api/guests', requireAuth(), requireRole('admin', 'manager
   const { tenantId, id: userId } = c.get('auth').user;
   const parsed = GuestSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: 'bad_request', details: parsed.error.issues }, 400);
-  const id = newId('gst');
+  const id = parsed.data.id ?? newId('gst');
   await db.run(
     `INSERT INTO guests (id, tenant_id, name, phone, email, tax_id, address, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [id, tenantId, parsed.data.name, parsed.data.phone ?? '', parsed.data.email ?? '', parsed.data.taxId ?? '', parsed.data.address ?? '', new Date().toISOString()]);
@@ -92,7 +92,7 @@ directoryRoutes.post('/api/reservations', requireAuth(), requireRole('admin', 'm
   const { tenantId, id: userId } = c.get('auth').user;
   const parsed = ReservationSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: 'bad_request', details: parsed.error.issues }, 400);
-  const id = newId('res');
+  const id = parsed.data.id ?? newId('res');
   await db.run(
     `INSERT INTO reservations (id, tenant_id, guest_id, guest_name, room_number, check_in, check_out, nightly_rate, status, notes, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'booked', ?, ?)`,

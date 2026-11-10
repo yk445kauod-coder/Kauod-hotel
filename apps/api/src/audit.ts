@@ -1,9 +1,7 @@
 import { Db } from './db.js';
-import { randomHex } from './crypto.js';
+import { newId } from '@kaoud/core';
 
-export function newId(prefix: string): string {
-  return `${prefix}_${randomHex(12)}`;
-}
+export { newId };
 
 export interface AuditEntry {
   tenantId: string;

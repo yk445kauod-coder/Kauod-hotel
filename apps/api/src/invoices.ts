@@ -62,6 +62,7 @@ export function effectiveTaxConfig(s: Settings, o: TaxOverrides) {
 }
 
 export interface CreateInvoiceInput extends InvoiceInput {
+  id?: string;
   guestId?: string;
   reservationId?: string;
   receiverTaxId?: string;
@@ -122,7 +123,7 @@ export async function createInvoice(
     serial = counter.next_override && counter.next_override > 0 ? counter.next_override : counter.next_serial;
   }
   const calc = calcInvoice(input, effectiveTaxConfig(settings, input));
-  const id = newId('inv');
+  const id = input.id ?? newId('inv');
   const now = new Date().toISOString();
   const uuid = uuidv4();
 

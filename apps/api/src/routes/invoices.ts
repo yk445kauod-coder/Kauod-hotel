@@ -240,7 +240,7 @@ invoiceRoutes.post('/api/invoices/:id/payments', requireAuth(), requireRole('adm
   const parsed = PaymentSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: 'bad_request', details: parsed.error.issues }, 400);
   const amount = parsed.data.amount.toFixed(2);
-  const id = newId('pay');
+  const id = parsed.data.id ?? newId('pay');
   const now = new Date().toISOString();
   await db.run(
     `INSERT INTO payments (id, tenant_id, invoice_id, amount, method, reference, paid_at, created_by, created_at)

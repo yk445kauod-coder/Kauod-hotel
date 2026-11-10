@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { IdSchema } from './ids.js';
 
 export const RoleSchema = z.enum(['admin', 'manager', 'reception', 'accountant']);
 export const InvoiceStatusSchema = z.enum(['draft', 'open', 'locked', 'cancelled']);
@@ -12,6 +13,7 @@ export const LineItemSchema = z.object({
 });
 
 export const InvoiceInputSchema = z.object({
+  id: IdSchema.optional(),
   guestName: z.string().trim().min(1).max(200),
   roomNumber: z.string().trim().max(20).optional().default(''),
   checkIn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -20,8 +22,8 @@ export const InvoiceInputSchema = z.object({
   discountPercent: z.coerce.number().min(0).max(100).optional(),
   applyDiscount: z.boolean().optional(),
   notes: z.string().trim().max(1000).optional().default(''),
-  guestId: z.string().uuid().optional(),
-  reservationId: z.string().uuid().optional(),
+  guestId: IdSchema.optional(),
+  reservationId: IdSchema.optional(),
   serial: z.coerce.number().int().min(1).optional(),
   opId: z.string().trim().max(80).optional(),
   // Per-invoice tax/branding overrides. Omitted or null = inherit from settings.
@@ -58,6 +60,7 @@ export const UpdateUserSchema = z.object({
 });
 
 export const PaymentSchema = z.object({
+  id: IdSchema.optional(),
   amount: z.coerce.number().positive(),
   method: PaymentMethodSchema,
   reference: z.string().trim().max(120).optional().default(''),
@@ -65,6 +68,7 @@ export const PaymentSchema = z.object({
 });
 
 export const RoomSchema = z.object({
+  id: IdSchema.optional(),
   number: z.string().trim().min(1).max(20),
   type: z.string().trim().max(60).optional().default(''),
   nightlyRate: z.coerce.number().nonnegative(),
@@ -73,6 +77,7 @@ export const RoomSchema = z.object({
 });
 
 export const GuestSchema = z.object({
+  id: IdSchema.optional(),
   name: z.string().trim().min(1).max(200),
   phone: z.string().trim().max(40).optional().default(''),
   email: z.string().trim().max(200).optional().default(''),
@@ -81,8 +86,9 @@ export const GuestSchema = z.object({
 });
 
 export const ReservationSchema = z.object({
+  id: IdSchema.optional(),
   guestName: z.string().trim().min(1).max(200),
-  guestId: z.string().uuid().optional(),
+  guestId: IdSchema.optional(),
   roomNumber: z.string().trim().max(20).optional().default(''),
   checkIn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   checkOut: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),

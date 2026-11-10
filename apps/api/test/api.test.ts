@@ -4,6 +4,7 @@ import { build } from 'esbuild';
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { newId } from '@kaoud/core';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const apiDir = join(here, '..');
@@ -400,5 +401,13 @@ describe('API integration', () => {
     expect(b.id).toBe(a.id);
     const list = await (await req('/api/rooms', {}, ctx)).json() as { rooms: { number: string }[] };
     expect(list.rooms.filter((r) => r.number === 'op-1')).toHaveLength(1);
+  });
+
+  it('accepts a client-supplied id (offline-created row)', async () => {
+    const ctx = await sharedCtx();
+    const id = newId('room');
+    const res = await req('/api/rooms', { method: 'POST', body: JSON.stringify({ id, number: 'cli-1', nightlyRate: 50 }) }, ctx);
+    expect(res.status).toBe(201);
+    expect((await res.json() as { id: string }).id).toBe(id);
   });
 });
