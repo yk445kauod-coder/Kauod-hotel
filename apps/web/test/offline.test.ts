@@ -1,9 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { IDBFactory } from 'fake-indexeddb';
-import { api } from '../src/api';
+import { api, ApiError } from '../src/api';
 import { queueInvoice, syncNow, listQueue, setBlock, getBlock, getDeviceId } from '../src/offline';
 
-vi.mock('../src/api', () => ({ api: { post: vi.fn() } }));
+vi.mock('../src/api', async () => {
+  const actual = await vi.importActual<typeof import('../src/api')>('../src/api');
+  return { api: { post: vi.fn() }, ApiError: actual.ApiError };
+});
 
 // Minimal localStorage for the node environment.
 const ls = new Map<string, string>();
@@ -70,6 +73,18 @@ describe('offline invoice queue', () => {
 
     const res = await syncNow();
     expect(res).toEqual({ sent: 0, failed: 1, rejected: 1 });
+    expect(await listQueue()).toHaveLength(1);
+  });
+
+  it('treats a 5xx as transient and keeps the invoice for a later retry', async () => {
+    await setBlock({ start: 940, end: 945, next: 940 });
+    await queueInvoice(draft('ح'));
+    // A server fault (e.g. an unapplied migration) must not permanently reject
+    // a valid invoice — it stays queued and is retried on the next sync.
+    vi.mocked(api.post).mockRejectedValue(new ApiError(500, 'internal_error'));
+
+    const res = await syncNow();
+    expect(res).toEqual({ sent: 0, failed: 1, rejected: 0 });
     expect(await listQueue()).toHaveLength(1);
   });
 

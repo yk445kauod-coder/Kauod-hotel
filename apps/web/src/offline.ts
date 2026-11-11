@@ -3,7 +3,7 @@
 // queued in IndexedDB. Each queued write carries an opId; the server applies
 // it exactly once, so replaying the queue after a reconnect is safe.
 import { calcInvoice } from '@kaoud/core';
-import { api } from './api';
+import { api, ApiError } from './api';
 
 const DB_NAME = 'kaoud-offline';
 const DB_VERSION = 2;
@@ -146,7 +146,9 @@ export const pendingCount = async () => (await qAll()).length;
 // Push every queued invoice to the server; drop the ones the server accepted.
 // A 4xx means the payload is permanently invalid (e.g. no lines) — keep it so
 // it can be corrected, but count it as rejected so the UI can flag it. A network
-// error (TypeError) means we're still offline: stop and retry later.
+// error (TypeError) means we're still offline, and a 5xx is a transient server
+// fault (a bad migration, an outage) — both stop the run and retry later, so a
+// valid invoice is never permanently wedged by a temporary failure.
 export async function syncNow(): Promise<{ sent: number; failed: number; rejected: number }> {
   const items = (await qAll()).sort((a, b) => a.serial - b.serial);
   let sent = 0; let failed = 0; let rejected = 0;
@@ -158,6 +160,8 @@ export async function syncNow(): Promise<{ sent: number; failed: number; rejecte
     } catch (e) {
       failed++;
       if (e instanceof TypeError) break;
+      const status = e instanceof ApiError ? e.status : 0;
+      if (status >= 500) break;
       rejected++;
     }
   }

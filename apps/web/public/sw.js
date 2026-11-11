@@ -1,7 +1,7 @@
 // Service worker: keeps the whole app shell (HTML, hashed JS/CSS, fonts, logo)
 // usable offline. API calls are never cached — offline reads/writes go through
 // the IndexedDB cache/outbox in the app instead, so stale data is never served.
-const CACHE = 'kaoud-shell-v3';
+const CACHE = 'kaoud-shell-v4';
 const CORE = [
   '/', '/index.html', '/manifest.webmanifest',
   '/icon-192.png', '/icon-512.png', '/favicon.png', '/apple-touch-icon.png',
@@ -20,16 +20,26 @@ self.addEventListener('install', (e) => {
   e.waitUntil((async () => {
     const cache = await caches.open(CACHE);
     await addAll(cache, CORE);
-    // Precache the actual hashed entry assets, discovered from index.html, so a
-    // brand-new install can boot with no network at all (the hashed names change
-    // on every build, so a static list would always be stale).
+    // Precache the exact build output from the manifest Vite emits. This covers
+    // every hashed asset, including lazy-loaded chunks (the dashboard charts)
+    // that no HTML file references — a static list would miss them and always
+    // be stale, since the hashes change on every build.
     try {
-      const res = await fetch(new Request('/index.html', { cache: 'reload' }));
-      const html = await res.clone().text();
-      await cache.put('/index.html', res);
-      const urls = [...html.matchAll(/(?:src|href)="(\/(?:assets|fonts)\/[^"]+)"/g)].map((m) => m[1]);
-      await addAll(cache, [...new Set(urls)]);
-    } catch { /* offline install: CORE still covers the shell */ }
+      const res = await fetch(new Request('/precache-manifest.json', { cache: 'reload' }));
+      const urls = await res.json();
+      await cache.put('/precache-manifest.json', res.clone());
+      await addAll(cache, [...new Set(urls)].filter((u) => typeof u === 'string' && u !== '/sw.js'));
+    } catch {
+      // No manifest (older build): fall back to the assets referenced by the
+      // current index.html so a fresh install can still boot offline.
+      try {
+        const res = await fetch(new Request('/index.html', { cache: 'reload' }));
+        const html = await res.clone().text();
+        await cache.put('/index.html', res);
+        const urls = [...html.matchAll(/(?:src|href)="(\/(?:assets|fonts)\/[^"]+)"/g)].map((m) => m[1]);
+        await addAll(cache, [...new Set(urls)]);
+      } catch { /* offline install: CORE still covers the shell */ }
+    }
     await self.skipWaiting();
   })());
 });

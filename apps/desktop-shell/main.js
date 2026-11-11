@@ -77,10 +77,21 @@ async function download(url, dest, tries = 3) {
   }
 }
 
-// Copy every file referenced by index.html that the app needs to boot offline,
-// plus the PWA manifest icons (referenced by the manifest, not index.html).
-// Best effort: a single missing asset must not abort the update.
-function collectAssets(html) {
+// Copy every file the app needs to boot and run offline. Prefer the build-time
+// manifest (covers lazy-loaded chunks such as the dashboard charts that no HTML
+// file references); fall back to the URLs referenced by index.html plus the PWA
+// manifest icons. Best effort: a single missing asset must not abort the update.
+async function collectAssets(html) {
+  try {
+    const res = await net.fetch(UPDATE_URL + '/precache-manifest.json?t=' + Date.now(), { cache: 'no-store' });
+    if (res.ok) {
+      const list = await res.json();
+      if (Array.isArray(list) && list.length) {
+        return [...new Set(list)].filter((u) => typeof u === 'string' && u !== '/sw.js');
+      }
+    }
+  } catch { /* fall through to index.html discovery */ }
+
   const urls = new Set();
   const re = /(?:src|href)="(\/[^"#?]+)"/g;
   let m;
@@ -112,7 +123,7 @@ async function checkForUpdate({ interactive = false } = {}) {
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, 'index.html'), html);
 
-    const assets = collectAssets(html);
+    const assets = await collectAssets(html);
     const results = await Promise.allSettled(
       assets.map((a) => download(UPDATE_URL + a, path.join(dir, decodeURIComponent(a)))));
     const ok = results.filter((r) => r.status === 'fulfilled').length;
