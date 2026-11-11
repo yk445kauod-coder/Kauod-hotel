@@ -200,6 +200,53 @@ describe('API integration', () => {
     expect(printBody.totalInWords).toContain('جنيه مصري');
   });
 
+
+  describe('invoice state machine (open -> locked -> printed)', () => {
+    const mkInvoice = async (ctx: Ctx) => {
+      const res = await req('/api/invoices', { method: 'POST', body: JSON.stringify({ guestName: 'state', lines: [{ description: 'x', qty: 1, unitPrice: 100 }] }) }, ctx);
+      return (await res.json() as { invoice: { id: string } }).invoice.id;
+    };
+
+    it('moves locked -> printed and lets a printed invoice print', async () => {
+      const ctx = await bootstrapAndLogin();
+      const inv = await mkInvoice(ctx);
+      expect((await req(`/api/invoices/${inv}/lock`, { method: 'POST' }, ctx)).status).toBe(200);
+      expect((await req(`/api/invoices/${inv}/print-confirm`, { method: 'POST' }, ctx)).status).toBe(200);
+      expect((await req(`/api/invoices/${inv}/print`, {}, ctx)).status).toBe(200);
+    });
+
+    it('refuses print-confirm unless the invoice is locked', async () => {
+      const ctx = await bootstrapAndLogin();
+      const inv = await mkInvoice(ctx);
+      expect((await req(`/api/invoices/${inv}/print-confirm`, { method: 'POST' }, ctx)).status).toBe(409);
+    });
+
+    it('does not move a printed invoice back to locked', async () => {
+      const ctx = await bootstrapAndLogin();
+      const inv = await mkInvoice(ctx);
+      await req(`/api/invoices/${inv}/lock`, { method: 'POST' }, ctx);
+      await req(`/api/invoices/${inv}/print-confirm`, { method: 'POST' }, ctx);
+      expect((await req(`/api/invoices/${inv}/lock`, { method: 'POST' }, ctx)).status).toBe(409);
+    });
+
+    it('unlock returns printed -> locked (admin)', async () => {
+      const ctx = await bootstrapAndLogin();
+      const inv = await mkInvoice(ctx);
+      await req(`/api/invoices/${inv}/lock`, { method: 'POST' }, ctx);
+      await req(`/api/invoices/${inv}/print-confirm`, { method: 'POST' }, ctx);
+      expect((await req(`/api/invoices/${inv}/unlock`, { method: 'POST' }, ctx)).status).toBe(200);
+    });
+
+    it('does not edit a printed invoice', async () => {
+      const ctx = await bootstrapAndLogin();
+      const inv = await mkInvoice(ctx);
+      await req(`/api/invoices/${inv}/lock`, { method: 'POST' }, ctx);
+      await req(`/api/invoices/${inv}/print-confirm`, { method: 'POST' }, ctx);
+      const put = await req(`/api/invoices/${inv}`, { method: 'PUT', body: JSON.stringify({ guestName: 'x', lines: [{ description: 'y', qty: 1, unitPrice: 10 }] }) }, ctx);
+      expect(put.status).toBe(409);
+    });
+  });
+
   it('allocates sequential serials and blocks lowering below max', async () => {
     const ctx = await bootstrapAndLogin();
     const mk = async () => (await (await req('/api/invoices', { method: 'POST', body: JSON.stringify({ guestName: 'g', lines: [{ description: 'x', qty: 1, unitPrice: 100 }] }) }, ctx)).json() as { invoice: { serial: number } }).invoice.serial;

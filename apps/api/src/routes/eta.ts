@@ -63,7 +63,7 @@ etaRoutes.post('/api/invoices/:id/eta/submit', requireAuth(), requireRole('admin
   const { tenantId, id: userId } = c.get('auth').user;
   const built = await buildPayload(c, (c.req.param('id') ?? ''));
   if (!built) return c.json({ error: 'not_found' }, 404);
-  if (built.inv.status !== 'locked') return c.json({ error: 'not_locked', message: 'Lock the invoice before submitting to ETA' }, 409);
+  if (built.inv.status !== 'locked' && built.inv.status !== 'printed') return c.json({ error: 'not_locked', message: 'Lock the invoice before submitting to ETA' }, 409);
   if (built.issues.length) return c.json({ error: 'eta_invalid', issues: built.issues }, 422);
 
   const queueId = newId('eta');

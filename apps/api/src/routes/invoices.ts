@@ -98,8 +98,7 @@ invoiceRoutes.put('/api/invoices/:id', requireAuth(), requireRole('admin', 'mana
   const { tenantId, id: userId } = c.get('auth').user;
   const inv = await getInvoice(db, tenantId, (c.req.param('id') ?? ''));
   if (!inv) return c.json({ error: 'not_found' }, 404);
-  if (inv.status === 'locked') return c.json({ error: 'invoice_locked' }, 409);
-  if (inv.status === 'cancelled') return c.json({ error: 'invoice_cancelled' }, 409);
+  if (inv.status !== 'open') return c.json({ error: 'bad_state' }, 409);
 
   const parsed = InvoiceInputSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: 'bad_request', details: parsed.error.issues }, 400);
@@ -138,16 +137,32 @@ invoiceRoutes.put('/api/invoices/:id', requireAuth(), requireRole('admin', 'mana
   return c.json({ invoice: updated, lines });
 });
 
-invoiceRoutes.post('/api/invoices/:id/lock', requireAuth(), requireRole('admin', 'manager'), idempotency(), async (c) => {
+invoiceRoutes.post('/api/invoices/:id/lock', requireAuth(), requireRole('admin', 'manager', 'reception'), idempotency(), async (c) => {
   const db = c.get('db');
   const { tenantId, id: userId } = c.get('auth').user;
   const inv = await getInvoice(db, tenantId, (c.req.param('id') ?? ''));
   if (!inv) return c.json({ error: 'not_found' }, 404);
-  if (inv.status === 'cancelled') return c.json({ error: 'invoice_cancelled' }, 409);
+  if (inv.status !== 'open') return c.json({ error: 'bad_state' }, 409);
   const now = new Date().toISOString();
   await db.run(`UPDATE invoices SET status = 'locked', locked_at = ?, updated_at = ? WHERE id = ? AND tenant_id = ?`,
     [now, now, inv.id, tenantId]);
   await audit(db, { tenantId, userId, action: 'invoice.lock', entity: 'invoice', entityId: inv.id, ip: clientIp(c) });
+  return c.json({ ok: true });
+});
+
+// V15's x-step: the employee confirms the locked invoice is printed. Only a
+// locked invoice can be confirmed, so the order open -> locked -> printed holds
+// and a printed invoice can never be stepped back by an employee.
+invoiceRoutes.post('/api/invoices/:id/print-confirm', requireAuth(), requireRole('admin', 'manager', 'reception'), idempotency(), async (c) => {
+  const db = c.get('db');
+  const { tenantId, id: userId } = c.get('auth').user;
+  const inv = await getInvoice(db, tenantId, (c.req.param('id') ?? ''));
+  if (!inv) return c.json({ error: 'not_found' }, 404);
+  if (inv.status !== 'locked') return c.json({ error: 'bad_state' }, 409);
+  const now = new Date().toISOString();
+  await db.run(`UPDATE invoices SET status = 'printed', updated_at = ? WHERE id = ? AND tenant_id = ?`,
+    [now, inv.id, tenantId]);
+  await audit(db, { tenantId, userId, action: 'invoice.print_confirm', entity: 'invoice', entityId: inv.id, ip: clientIp(c) });
   return c.json({ ok: true });
 });
 
@@ -156,10 +171,18 @@ invoiceRoutes.post('/api/invoices/:id/unlock', requireAuth(), requireRole('admin
   const { tenantId, id: userId } = c.get('auth').user;
   const inv = await getInvoice(db, tenantId, (c.req.param('id') ?? ''));
   if (!inv) return c.json({ error: 'not_found' }, 404);
+  if (inv.status !== 'locked' && inv.status !== 'printed') return c.json({ error: 'bad_state' }, 409);
   const now = new Date().toISOString();
-  await db.run(`UPDATE invoices SET status = 'open', locked_at = NULL, updated_at = ? WHERE id = ? AND tenant_id = ?`,
-    [now, inv.id, tenantId]);
-  await audit(db, { tenantId, userId, action: 'invoice.unlock', entity: 'invoice', entityId: inv.id, ip: clientIp(c) });
+  // Step back one level: printed -> locked, locked -> open. A cancelled invoice
+  // is never resurrected.
+  if (inv.status === 'printed') {
+    await db.run(`UPDATE invoices SET status = 'locked', updated_at = ? WHERE id = ? AND tenant_id = ?`,
+      [now, inv.id, tenantId]);
+  } else {
+    await db.run(`UPDATE invoices SET status = 'open', locked_at = NULL, updated_at = ? WHERE id = ? AND tenant_id = ?`,
+      [now, inv.id, tenantId]);
+  }
+  await audit(db, { tenantId, userId, action: 'invoice.unlock', entity: 'invoice', entityId: inv.id, detail: { from: inv.status }, ip: clientIp(c) });
   return c.json({ ok: true });
 });
 
@@ -169,6 +192,7 @@ invoiceRoutes.post('/api/invoices/:id/cancel', requireAuth(), requireRole('admin
   const { tenantId, id: userId } = c.get('auth').user;
   const inv = await getInvoice(db, tenantId, (c.req.param('id') ?? ''));
   if (!inv) return c.json({ error: 'not_found' }, 404);
+  if (!['open', 'locked', 'printed'].includes(inv.status)) return c.json({ error: 'bad_state' }, 409);
   const body = await c.req.json().catch(() => ({})) as { reason?: string };
   const now = new Date().toISOString();
   await db.run(`UPDATE invoices SET status = 'cancelled', cancelled_at = ?, updated_at = ?, notes = notes || ? WHERE id = ? AND tenant_id = ?`,
@@ -183,7 +207,7 @@ invoiceRoutes.get('/api/invoices/:id/print', requireAuth(), async (c) => {
   const { tenantId } = c.get('auth').user;
   const inv = await getInvoice(db, tenantId, (c.req.param('id') ?? ''));
   if (!inv) return c.json({ error: 'not_found' }, 404);
-  if (inv.status !== 'locked' && inv.status !== 'cancelled') {
+  if (!['locked', 'printed', 'cancelled'].includes(inv.status)) {
     return c.json({ error: 'not_printable', message: 'Invoice must be locked before printing' }, 409);
   }
   const settings = await loadSettings(db, tenantId);
