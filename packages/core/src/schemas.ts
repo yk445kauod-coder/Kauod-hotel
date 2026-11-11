@@ -1,21 +1,24 @@
 import { z } from 'zod';
 import { IdSchema } from './ids.js';
+import { LINE_KINDS } from './types.js';
 
 export const RoleSchema = z.enum(['admin', 'manager', 'reception', 'accountant']);
 export const InvoiceStatusSchema = z.enum(['draft', 'open', 'locked', 'printed', 'cancelled']);
 export const PaymentMethodSchema = z.enum(['cash', 'card', 'instapay', 'bank_transfer', 'other']);
+export const LineKindSchema = z.enum(LINE_KINDS);
 
 export const LineItemSchema = z.object({
   description: z.string().trim().min(1).max(300),
   qty: z.coerce.number().positive().max(10_000),
   unitPrice: z.coerce.number().nonnegative().max(10_000_000).transform((n) => n.toFixed(2)),
-  kind: z.enum(['room', 'restaurant', 'minibar', 'laundry', 'extra']).default('extra'),
+  kind: LineKindSchema.default('extra'),
 });
 
 export const InvoiceInputSchema = z.object({
   id: IdSchema.optional(),
   guestName: z.string().trim().min(1).max(200),
   roomNumber: z.string().trim().max(20).optional().default(''),
+  receiverTaxId: z.string().trim().max(20).optional().default(''),
   checkIn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   checkOut: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   lines: z.array(LineItemSchema).min(1).max(100),

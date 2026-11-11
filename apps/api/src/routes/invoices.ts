@@ -110,12 +110,13 @@ invoiceRoutes.put('/api/invoices/:id', requireAuth(), requireRole('admin', 'mana
   const stmts: Array<{ sql: string; params: unknown[] }> = [
     { sql: `DELETE FROM invoice_lines WHERE invoice_id = ? AND tenant_id = ?`, params: [inv.id, tenantId] },
     {
-      sql: `UPDATE invoices SET guest_name = ?, room_number = ?, check_in = ?, check_out = ?,
+      sql: `UPDATE invoices SET guest_name = ?, room_number = ?, receiver_tax_id = ?, check_in = ?, check_out = ?,
               subtotal_net = ?, subtotal_gross = ?, tax_total = ?, discount = ?, total = ?, notes = ?,
               vat_rate = ?, discount_rate = ?, issuer_name = ?, issuer_tax_id = ?, issuer_address = ?,
               payment_method = ?, updated_at = ?
             WHERE id = ? AND tenant_id = ?`,
-      params: [parsed.data.guestName, parsed.data.roomNumber ?? '', parsed.data.checkIn ?? null, parsed.data.checkOut ?? null,
+      params: [parsed.data.guestName, parsed.data.roomNumber ?? '', parsed.data.receiverTaxId ?? '',
+        parsed.data.checkIn ?? null, parsed.data.checkOut ?? null,
         calc.subtotalNet, calc.subtotalGross, calc.taxTotal, calc.discount, calc.total, parsed.data.notes ?? '',
         parsed.data.vatRate ?? null, parsed.data.discountRate ?? null,
         parsed.data.issuerName ?? null, parsed.data.issuerTaxId ?? null, parsed.data.issuerAddress ?? null,

@@ -420,6 +420,37 @@ describe('API integration', () => {
     expect(res.status).toBe(400);
   });
 
+  it('rejects a line kind outside the canonical set', async () => {
+    const ctx = await sharedCtx();
+    const res = await req('/api/invoices', {
+      method: 'POST',
+      body: JSON.stringify({ guestName: 'x', lines: [{ description: 'x', qty: 1, unitPrice: 100, kind: 'other' }] }),
+    }, ctx);
+    expect(res.status).toBe(400);
+    const body = await res.json() as { details: { path: unknown[] }[] };
+    expect(body.details.some((d) => d.path.includes('kind'))).toBe(true);
+  });
+
+  it('stores the receiver tax id on create and keeps it on update', async () => {
+    const ctx = await sharedCtx();
+    const create = await req('/api/invoices', {
+      method: 'POST',
+      body: JSON.stringify({ guestName: 'recv', receiverTaxId: '123456789', lines: [{ description: 'x', qty: 1, unitPrice: 100 }] }),
+    }, ctx);
+    expect(create.status).toBe(201);
+    const { invoice } = await create.json() as { invoice: { id: string; receiver_tax_id: string } };
+    expect(invoice.receiver_tax_id).toBe('123456789');
+
+    // A later edit must not silently drop it.
+    const upd = await req(`/api/invoices/${invoice.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ guestName: 'recv2', receiverTaxId: '987654321', lines: [{ description: 'x', qty: 1, unitPrice: 100 }] }),
+    }, ctx);
+    expect(upd.status).toBe(200);
+    const updated = await upd.json() as { invoice: { receiver_tax_id: string } };
+    expect(updated.invoice.receiver_tax_id).toBe('987654321');
+  });
+
   it('persists branding settings (logo, signatures, footer)', async () => {
     const ctx = await sharedCtx();
     const put = await req('/api/settings', {

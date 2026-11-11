@@ -6,11 +6,14 @@ import { Icon } from '../components/Icon';
 import { cacheGet, cacheSet } from '../cache';
 import type { SessionUser, Settings, InvoiceSummary, InvoiceFull, InvoiceLine } from '../types';
 import { egp, egpEn, d, dt, STATUS_LABEL, ETA_LABEL, PAY_LABEL, today, addDays, nightsBetween } from '../format';
-import { calcInvoice } from '@kaoud/core';
+import { calcInvoice, LINE_KINDS, type LineKind } from '@kaoud/core';
 
 interface DraftLine { description: string; qty: number; unitPrice: string; kind: string; }
 
-const KIND_LABEL: Record<string, string> = { room: 'إقامة', restaurant: 'مطعم', minibar: 'ميني بار', laundry: 'مغسلة', other: 'أخرى', extra: 'إضافي' };
+// Labels for the canonical line kinds. The keys must match LINE_KINDS exactly —
+// the server rejects any other value, and an offline invoice carrying one would
+// sit in the queue forever.
+const KIND_LABEL: Record<string, string> = { room: 'إقامة', restaurant: 'مطعم', minibar: 'ميني بار', laundry: 'مغسلة', extra: 'إضافي' };
 
 export function Invoices({ user, settings, onPrint, openNewSignal = 0, offline = false, online = true, onQueued }: {
   user: SessionUser; settings: Settings | null; onPrint: (id: string) => void;
@@ -369,11 +372,18 @@ function InvoiceEditor({ user, settings, id, initial, onClose, onSaved, onPrint,
     try {
       const lines = draft.lines.filter((l) => l.description.trim()).map((l) => ({
         description: l.description.trim(), qty: Number(l.qty) || 1, unitPrice: l.unitPrice || '0',
-        kind: l.kind as 'room' | 'restaurant' | 'minibar' | 'laundry' | 'extra',
+        kind: l.kind as LineKind,
       }));
       // An invoice with no lines has no total; the server rejects it, and an
       // offline one would sit in the queue forever. Block it here instead.
       if (lines.length === 0) { setErr('أضف بندًا واحدًا على الأقل (الوصف مطلوب)'); return; }
+      // The server requires the issuer tax number to be exactly 9 digits; a free
+      // value would be rejected 400 (and wedge an offline queue item).
+      const issuerTaxId = draft.issuerTaxId.trim();
+      if (issuerTaxId !== '' && !/^\d{9}$/.test(issuerTaxId)) {
+        setErr('الرقم الضريبي للمُصدر يجب أن يكون 9 أرقام بالضبط، أو اتركه فارغًا لاستخدام الإعدادات');
+        return;
+      }
       // Offline: queue the invoice locally, numbered from the device's reserved
       // block; it is pushed to the server on the next sync.
       if (offline && !id) {
@@ -495,7 +505,7 @@ function InvoiceEditor({ user, settings, id, initial, onClose, onSaved, onPrint,
               <td><input value={l.description} onChange={(e) => setLine(i, { description: e.target.value })} placeholder="مثال: إقامة غرفة" style={{ width: '100%', padding: 7, border: '1px solid var(--border)', borderRadius: 6 }} /></td>
               <td>
                 <select value={l.kind} onChange={(e) => setLine(i, { kind: e.target.value })} style={{ padding: 7, border: '1px solid var(--border)', borderRadius: 6 }}>
-                  {Object.entries(KIND_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                  {LINE_KINDS.map((k) => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}
                 </select>
               </td>
               <td className="num"><input type="number" min="0" step="1" value={l.qty} onChange={(e) => setLine(i, { qty: Number(e.target.value) })} style={{ width: 80, padding: 7, border: '1px solid var(--border)', borderRadius: 6 }} dir="ltr" /></td>
