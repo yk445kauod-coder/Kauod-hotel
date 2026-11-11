@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { api, ApiError } from '../api';
 import { exportExcel, openPrintWindow } from '../exports';
-import { queueInvoice, listQueue, syncNow, type QueuedInvoice } from '../offline';
+import { queueInvoice, listQueue, removeQueued, syncNow, type QueuedInvoice } from '../offline';
 import { cacheGet, cacheSet } from '../cache';
 import type { SessionUser, Settings, InvoiceSummary, InvoiceFull, InvoiceLine } from '../types';
 import { egp, egpEn, d, dt, STATUS_LABEL, ETA_LABEL, PAY_LABEL, today, addDays, nightsBetween } from '../format';
@@ -68,10 +68,20 @@ export function Invoices({ user, settings, onPrint, openNewSignal = 0, offline =
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openNewSignal]);
 
+  async function discardQueued(opId: string) {
+    await removeQueued(opId);
+    await refreshQueue();
+    onQueued?.();
+  }
+
   async function flushQueue() {
-    setBusy(true);
-    try { await syncNow(); await refreshQueue(); await load(); onQueued?.(); }
-    finally { setBusy(false); }
+    setBusy(true); setInfo('');
+    try {
+      const r = await syncNow();
+      await refreshQueue(); await load(); onQueued?.();
+      if (r.rejected > 0) setErr(`${r.rejected} فاتورة مرفوضة من الخادم — عدّلها أو احذفها من القائمة.`);
+      else if (r.sent > 0) setInfo(`تم رفع ${r.sent} فاتورة.`);
+    } finally { setBusy(false); }
   }
 
   function clearSearch() {
@@ -193,7 +203,7 @@ export function Invoices({ user, settings, onPrint, openNewSignal = 0, offline =
           </div>
           <div className="muted" style={{ fontSize: 12.5 }}>اتحفظت محليًا على الجهاز بأرقام محجوزة، وستُرفع تلقائيًا عند عودة الاتصال.</div>
           <table data-mobile="cards" style={{ marginTop: 10 }}>
-            <thead><tr><th>رقم</th><th>النزيل</th><th>الغرفة</th><th className="num">الإجمالي</th><th>الوقت</th></tr></thead>
+            <thead><tr><th>رقم</th><th>النزيل</th><th>الغرفة</th><th className="num">الإجمالي</th><th>الوقت</th><th></th></tr></thead>
             <tbody>
               {queue.map((it) => (
                 <tr key={it.opId}>
@@ -202,6 +212,7 @@ export function Invoices({ user, settings, onPrint, openNewSignal = 0, offline =
                   <td className="mono" data-label="الغرفة">{it.roomNumber || '—'}</td>
                   <td className="num" data-label="الإجمالي">{egp(it.total)}</td>
                   <td className="muted" data-label="الوقت">{dt(it.createdAt)}</td>
+                  <td><button className="btn ghost" disabled={busy} onClick={() => discardQueued(it.opId)}>حذف</button></td>
                 </tr>
               ))}
             </tbody>
@@ -359,6 +370,9 @@ function InvoiceEditor({ user, settings, id, initial, onClose, onSaved, onPrint,
         description: l.description.trim(), qty: Number(l.qty) || 1, unitPrice: l.unitPrice || '0',
         kind: l.kind as 'room' | 'restaurant' | 'minibar' | 'laundry' | 'extra',
       }));
+      // An invoice with no lines has no total; the server rejects it, and an
+      // offline one would sit in the queue forever. Block it here instead.
+      if (lines.length === 0) { setErr('أضف بندًا واحدًا على الأقل (الوصف مطلوب)'); return; }
       // Offline: queue the invoice locally, numbered from the device's reserved
       // block; it is pushed to the server on the next sync.
       if (offline && !id) {

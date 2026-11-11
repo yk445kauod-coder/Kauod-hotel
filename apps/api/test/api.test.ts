@@ -305,6 +305,33 @@ describe('API integration', () => {
     });
   });
 
+  describe('reset-password', () => {
+    it('owner resets a user password to a strong random value', async () => {
+      const owner = await bootstrapAndLogin();
+      await req('/api/users', { method: 'POST', body: JSON.stringify({ username: 'resetme', name: 'يوزر', password: 'Reset@2026x', role: 'accountant' }) }, owner);
+      const users = await (await req('/api/users', {}, owner)).json() as { users: { id: string; username: string }[] };
+      const target = users.users.find((u) => u.username === 'resetme')!;
+      const r = await req('/api/admin/reset-admin-password', { method: 'POST', body: JSON.stringify({ userId: target.id }) }, owner);
+      expect(r.status).toBe(200);
+      const body = await r.json() as { password: string };
+      expect(body.password.length).toBeGreaterThanOrEqual(10);
+      expect(/[a-z]/.test(body.password) && /[A-Z]/.test(body.password) && /[0-9]/.test(body.password)).toBe(true);
+      // the new password actually works
+      const fresh = await login('resetme', body.password);
+      expect(fresh.csrf).toBeTruthy();
+    });
+
+    it('refuses a non-owner', async () => {
+      const owner = await bootstrapAndLogin();
+      await req('/api/users', { method: 'POST', body: JSON.stringify({ username: 'mgr1', name: 'مدير', password: 'Mgr@2026xx', role: 'manager' }) }, owner);
+      const mgr = await login('mgr1', 'Mgr@2026xx');
+      const users = await (await req('/api/users', {}, mgr)).json() as { users: { id: string }[] };
+      const r = await req('/api/admin/reset-admin-password', { method: 'POST', body: JSON.stringify({ userId: users.users[0].id }) }, mgr);
+      expect(r.status).toBe(403);
+    });
+  });
+
+
 
   it('allocates sequential serials and blocks lowering below max', async () => {
     const ctx = await bootstrapAndLogin();

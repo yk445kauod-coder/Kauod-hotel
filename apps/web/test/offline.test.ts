@@ -47,7 +47,7 @@ describe('offline invoice queue', () => {
     vi.mocked(api.post).mockResolvedValue({} as never);
 
     const res = await syncNow();
-    expect(res).toEqual({ sent: 2, failed: 0 });
+    expect(res).toEqual({ sent: 2, failed: 0, rejected: 0 });
     expect(await listQueue()).toHaveLength(0);
     expect(vi.mocked(api.post).mock.calls[0]?.[1]).toMatchObject({ serial: 700 });
   });
@@ -59,6 +59,17 @@ describe('offline invoice queue', () => {
 
     const res = await syncNow();
     expect(res.failed).toBe(1);
+    expect(res.rejected).toBe(0);
+    expect(await listQueue()).toHaveLength(1);
+  });
+
+  it('flags a payload the server permanently rejects, but keeps it', async () => {
+    await setBlock({ start: 920, end: 925, next: 920 });
+    await queueInvoice(draft('ز'));
+    vi.mocked(api.post).mockRejectedValue(new Error('bad_request'));
+
+    const res = await syncNow();
+    expect(res).toEqual({ sent: 0, failed: 1, rejected: 1 });
     expect(await listQueue()).toHaveLength(1);
   });
 

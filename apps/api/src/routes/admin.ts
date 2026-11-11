@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { CreateUserSchema, UpdateUserSchema, SettingsSchema, ChangeSerialSchema, SerialReserveSchema, SerialReleaseSchema } from '@kaoud/core';
-import { passwordIssues } from '../crypto.js';
+import { passwordIssues, randomHex } from '../crypto.js';
 import type { Env } from '../db.js';
 import { requireAuth, requireRole } from '../auth-middleware.js';
 import { hashPassword } from '../crypto.js';
@@ -432,4 +432,29 @@ adminRoutes.post('/api/admin/clear-data', requireAuth(), async (c) => {
     [tenantId, tenantId]);
   await audit(db, { tenantId, userId, action: 'admin.clear_data', entity: 'tenant', entityId: tenantId, detail: { tables }, ip: clientIp(c) });
   return c.json({ ok: true });
+});
+
+// ---------- owner-only: reset a user's password ----------
+// The plaintext is returned exactly once, never stored; the user's existing
+// sessions are dropped so a stolen session can't outlive the reset.
+adminRoutes.post('/api/admin/reset-admin-password', requireAuth(), async (c) => {
+  const db = c.get('db');
+  const auth = c.get('auth').user;
+  if (!auth.isOwner) return c.json({ error: 'forbidden' }, 403);
+  const body = await c.req.json().catch(() => ({})) as { userId?: string };
+  const target = await db.one<{ id: string; username: string }>(
+    `SELECT id, username FROM users WHERE id = ? AND tenant_id = ?`, [body.userId ?? '', auth.tenantId]);
+  if (!target) return c.json({ error: 'not_found' }, 404);
+
+  let password = '';
+  for (let i = 0; i < 20 && passwordIssues(password).length; i++) password = `Kd-${randomHex(8)}`;
+  if (passwordIssues(password).length) return c.json({ error: 'internal_error' }, 500);
+
+  const pw = await hashPassword(password);
+  await db.run(
+    `UPDATE users SET password_hash = ?, password_salt = ?, iterations = ? WHERE id = ? AND tenant_id = ?`,
+    [pw.hash, pw.salt, pw.iterations, target.id, auth.tenantId]);
+  await db.run(`DELETE FROM sessions WHERE user_id = ?`, [target.id]);
+  await audit(db, { tenantId: auth.tenantId, userId: auth.id, action: 'admin.reset_password', entity: 'user', entityId: target.id, detail: { username: target.username }, ip: clientIp(c) });
+  return c.json({ ok: true, password });
 });

@@ -140,24 +140,28 @@ export async function queueInvoice(input: OfflineCreateInput): Promise<QueuedInv
 }
 
 export const listQueue = qAll;
+export const removeQueued = qDel;
 export const pendingCount = async () => (await qAll()).length;
 
 // Push every queued invoice to the server; drop the ones the server accepted.
-export async function syncNow(): Promise<{ sent: number; failed: number }> {
+// A 4xx means the payload is permanently invalid (e.g. no lines) — keep it so
+// it can be corrected, but count it as rejected so the UI can flag it. A network
+// error (TypeError) means we're still offline: stop and retry later.
+export async function syncNow(): Promise<{ sent: number; failed: number; rejected: number }> {
   const items = (await qAll()).sort((a, b) => a.serial - b.serial);
-  let sent = 0; let failed = 0;
+  let sent = 0; let failed = 0; let rejected = 0;
   for (const it of items) {
     try {
       await api.post('/api/invoices', it.payload);
       await qDel(it.opId);
       sent++;
     } catch (e) {
-      // Network still down → stop; a rejected payload stays for inspection.
-      if (e instanceof TypeError) { failed++; break; }
       failed++;
+      if (e instanceof TypeError) break;
+      rejected++;
     }
   }
-  return { sent, failed };
+  return { sent, failed, rejected };
 }
 
 export function isOnline(): boolean { return typeof navigator === 'undefined' ? true : navigator.onLine; }
