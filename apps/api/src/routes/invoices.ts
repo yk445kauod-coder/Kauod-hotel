@@ -203,12 +203,15 @@ invoiceRoutes.post('/api/invoices/:id/cancel', requireAuth(), requireRole('admin
 });
 
 // Full print payload: invoice + lines + computed tax breakdown + ETA QR + payment status.
+// Printable states: open (a draft/preview), locked, printed, cancelled. An open
+// invoice prints with a "مسودة/DRAFT" watermark so a preview can never be
+// mistaken for a finalized invoice; the lock step remains the gate for a real one.
 invoiceRoutes.get('/api/invoices/:id/print', requireAuth(), async (c) => {
   const db = c.get('db');
   const { tenantId } = c.get('auth').user;
   const inv = await getInvoice(db, tenantId, (c.req.param('id') ?? ''));
   if (!inv) return c.json({ error: 'not_found' }, 404);
-  if (!['locked', 'printed', 'cancelled'].includes(inv.status)) {
+  if (!['open', 'locked', 'printed', 'cancelled'].includes(inv.status)) {
     return c.json({ error: 'not_printable', message: 'Invoice must be locked before printing' }, 409);
   }
   const settings = await loadSettings(db, tenantId);

@@ -13,40 +13,49 @@ export function nightsBetween(checkIn?: string, checkOut?: string): number {
 // Prices are tax-INCLUSIVE by default (the hotel quotes a gross nightly rate).
 // The invoice must show net + tax - discount == total, always. That is the
 // invariant the previous version violated (subtotal + tax - discount != total).
+//
+// VAT is rounded ONCE on the document subtotal (exactly like the V15 reference,
+// `Math.round(sub*14/114*100)/100`) and then reconciled onto the lines so the
+// per-line taxes still sum to the document tax. Rounding each line independently
+// and summing would drift by a piastre on multi-line invoices, so the printed VAT
+// would not match V15.
 export function calcInvoice(input: InvoiceInput, cfg: TaxConfig): CalcResult {
   const vatRate = Math.max(0, cfg.vatRate);
   const discountRate = input.applyDiscount === false ? 0 : Math.max(0, input.discountPercent ?? cfg.discountRate);
 
-  const lines: LineResult[] = [];
-  let subtotalGrossM = 0;
-  let subtotalNetM = 0;
-  let taxTotalM = 0;
-
+  const grossM: Minor[] = [];
   for (const li of input.lines) {
     const qty = Number(li.qty) || 0;
-    const unitM = parseMoney(li.unitPrice);
-    const grossM = Math.round(qty * unitM);
-    let netM: number;
-    let taxM: number;
-    if (cfg.pricesIncludeTax) {
-      netM = mulDiv(grossM, 100, 100 + vatRate);
-      taxM = grossM - netM;
-    } else {
-      netM = grossM;
-      taxM = mulDiv(netM, vatRate, 100);
-    }
-    subtotalGrossM += grossM;
-    subtotalNetM += netM;
-    taxTotalM += taxM;
-    lines.push({
-      description: li.description,
-      qty,
-      unitPrice: formatMoney(unitM),
-      gross: formatMoney(grossM),
-      net: formatMoney(netM),
-      tax: formatMoney(taxM),
-    });
+    grossM.push(Math.round(qty * parseMoney(li.unitPrice)));
   }
+  const subtotalGrossM = sum(...grossM);
+
+  // Document-level net/tax, each rounded a single time (matches V15).
+  const taxTotalM = cfg.pricesIncludeTax
+    ? mulDiv(subtotalGrossM, vatRate, 100 + vatRate)
+    : mulDiv(subtotalGrossM, vatRate, 100);
+  const subtotalNetM = cfg.pricesIncludeTax ? subtotalGrossM - taxTotalM : subtotalGrossM;
+
+  // Distribute onto lines, then fold any rounding drift into the last line so
+  // sum(line.net) == subtotalNet and sum(line.tax) == taxTotal exactly.
+  const netM = grossM.map((g) => (cfg.pricesIncludeTax ? mulDiv(g, 100, 100 + vatRate) : g));
+  const taxM = cfg.pricesIncludeTax
+    ? grossM.map((g, i) => g - netM[i])
+    : netM.map((n) => mulDiv(n, vatRate, 100));
+  if (netM.length > 0) {
+    const last = netM.length - 1;
+    netM[last] += subtotalNetM - sum(...netM);
+    taxM[last] += taxTotalM - sum(...taxM);
+  }
+
+  const lines: LineResult[] = input.lines.map((li, i) => ({
+    description: li.description,
+    qty: Number(li.qty) || 0,
+    unitPrice: formatMoney(parseMoney(li.unitPrice)),
+    gross: formatMoney(grossM[i]),
+    net: formatMoney(netM[i]),
+    tax: formatMoney(taxM[i]),
+  }));
 
   const discountM = mulDiv(subtotalNetM, Math.round(discountRate * 100), 10_000);
   const totalM = subtotalNetM + taxTotalM - discountM;

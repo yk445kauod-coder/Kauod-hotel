@@ -29,7 +29,7 @@ const NAV: { id: Tab; label: string; ico: IconName; roles?: SessionUser['role'][
   { id: 'dashboard', label: 'لوحة التحكم', ico: 'dashboard' },
   { id: 'invoices', label: 'الفواتير', ico: 'invoice' },
   { id: 'reports', label: 'التقارير', ico: 'reports' },
-  { id: 'directory', label: 'الغرف والنزلاء', ico: 'hotel' },
+  { id: 'directory', label: 'النزلاء', ico: 'hotel' },
   { id: 'serial', label: 'أرقام الفواتير', ico: 'hash', roles: ['admin', 'manager'] },
   { id: 'users', label: 'المستخدمون', ico: 'users', roles: ['admin', 'manager'] },
   { id: 'monitor', label: 'مراقبة المستخدمين', ico: 'monitor', roles: ['admin', 'manager'] },
@@ -301,7 +301,7 @@ export function App() {
           {tab === 'dashboard' && <Dashboard user={user} onOpenInvoice={(id) => { setPrintId(id); }} onNewInvoice={() => { setTab('invoices'); setNewInvoiceSignal((n) => n + 1); }} />}
           {tab === 'invoices' && <Invoices user={user} settings={settings} onPrint={(id) => setPrintId(id)} openNewSignal={newInvoiceSignal} offline={offlineMode} online={online} onQueued={onSynced} />}
           {tab === 'reports' && <ReportsPage />}
-          {tab === 'directory' && <DirectoryPage user={user} />}
+          {tab === 'directory' && <DirectoryPage />}
           {tab === 'serial' && <SerialPage user={user} />}
           {tab === 'users' && <UsersPage user={user} />}
           {tab === 'monitor' && <MonitoringPage />}

@@ -9,3 +9,6 @@ coverage/
 .vite/
 .openhands/
 .backups/
+
+# TypeScript build info
+*.tsbuildinfo

@@ -97,3 +97,30 @@ describe('per-invoice tax overrides (engine level)', () => {
     expect(r.taxTotal).toBe('100.00');
   });
 });
+
+describe('V15 parity (round VAT once on the subtotal, not per line)', () => {
+  // V15: sub = sum(gross); vat = round(sub*14/114, 2); disc = round((sub-vat)*3%, 2);
+  // total = sub - disc. Per-line rounding would drift by a piastre here.
+  const multi = input({
+    applyDiscount: false,
+    lines: [
+      { description: 'أ', qty: 1, unitPrice: '10.01', kind: 'extra' },
+      { description: 'ب', qty: 1, unitPrice: '20.02', kind: 'extra' },
+    ],
+  });
+
+  it('rounds the document VAT once (10.01 + 20.02 = 30.03 -> 3.69)', () => {
+    const c = calcInvoice(multi, cfg);
+    expect(c.subtotalGross).toBe('30.03');
+    expect(c.taxTotal).toBe('3.69');
+    expect(c.subtotalNet).toBe('26.34');
+  });
+
+  it('per-line net + tax equals the document subtotal exactly (no drift)', () => {
+    const c = calcInvoice(multi, cfg);
+    const net = c.lines.reduce((s, l) => s + parseMoney(l.net), 0);
+    const tax = c.lines.reduce((s, l) => s + parseMoney(l.tax), 0);
+    expect(net).toBe(parseMoney(c.subtotalNet));
+    expect(tax).toBe(parseMoney(c.taxTotal));
+  });
+});

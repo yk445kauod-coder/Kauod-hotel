@@ -269,6 +269,7 @@ a { color: var(--brand); }
   .inv-ft { flex-direction: column; text-align: center; }
   .inv-table { width: calc(100% - 32px); margin-inline: 16px; }
   .inv-cancel-watermark { font-size: 54px; }
+  .inv-draft-watermark { font-size: 54px; }
 }
 
 /* Card layout for data tables on phones (opt-in via data-mobile="cards").
@@ -534,6 +535,8 @@ td.num, th.num { text-align: end; font-variant-numeric: tabular-nums; direction:
 /* cancellation overlay */
 .inv-cancel-watermark { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; transform: rotate(-24deg); font-size: 84px; font-weight: 900; color: rgba(192, 0, 0, .12); letter-spacing: 6px; pointer-events: none; z-index: 3; }
 .inv-cancel-note { background: #fdeaea; color: #a11; text-align: center; padding: 7px; font-weight: 800; font-size: 12px; }
+.inv-draft-watermark { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; transform: rotate(-24deg); font-size: 84px; font-weight: 900; color: rgba(138, 109, 0, .13); letter-spacing: 6px; pointer-events: none; z-index: 3; }
+.inv-draft-note { background: #fdf6e3; color: #8a6d00; text-align: center; padding: 7px; font-weight: 800; font-size: 12px; }
 
 /* ============================================================== dashboard */
 .dash-hero {

@@ -84,6 +84,9 @@ export function PrintView({ invoiceId, onClose }: { invoiceId: string; onClose: 
   const [sigLar, sigLen] = sig(settings.signature_left);
   const [sigRar, sigRen] = sig(settings.signature_right);
   const cancelled = invoice.status === 'cancelled';
+  // An open invoice is a draft: it prints with a watermark so a preview can never
+  // be mistaken for a finalized (locked/printed) invoice.
+  const draft = invoice.status === 'open';
 
   // Nightly rate = the unit price of the accommodation line (as in the reference invoice).
   const roomLine = lines.find((l) => l.kind === 'room') ?? (lines.length === 1 ? lines[0] : undefined);
@@ -119,6 +122,12 @@ export function PrintView({ invoiceId, onClose }: { invoiceId: string; onClose: 
             <>
               <div className="inv-cancel-watermark">ملغية · CANCELLED</div>
               <div className="inv-cancel-note">هذه الفاتورة ملغية ولا يعتد بها — لا تستخدمها كفاتورة سليمة</div>
+            </>
+          )}
+          {draft && (
+            <>
+              <div className="inv-draft-watermark">مسودة · DRAFT</div>
+              <div className="inv-draft-note">مسودة غير مقفلة — اقفل الفاتورة لتصبح نهائية. لا يُعتد بها كفاتورة مصدرها الضرائب.</div>
             </>
           )}
 

@@ -36,11 +36,6 @@ export interface CalcResult {
 }
 
 export interface Payment { id: string; amount: string; method: string; reference: string; paid_at: string; created_at: string; }
-export interface Room { id: string; number: string; type: string; nightly_rate: string; capacity: number; active: number; }
-export interface Guest { id: string; name: string; phone: string; email: string; tax_id: string; address: string; created_at: string; }
-export interface Reservation {
-  id: string; guest_name: string; room_number: string; check_in: string; check_out: string;
-  nightly_rate: string; status: string; notes: string; created_at: string;
-}
+export interface DirectoryName { name: string; invoices: number; last_issued: string | null; }
 export interface AuditEntry { id: string; user_id: string | null; action: string; entity: string; entity_id: string | null; detail: string; ip: string | null; created_at: string; }
 export interface EtaQueueItem { id: string; invoice_id: string; status: string; attempts: number; last_error: string | null; created_at: string; updated_at: string; serial: number; }

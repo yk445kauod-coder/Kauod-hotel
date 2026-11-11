@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { api, ApiError } from '../api';
 import { exportExcel, openPrintWindow } from '../exports';
 import { queueInvoice, listQueue, removeQueued, syncNow, type QueuedInvoice } from '../offline';
@@ -96,6 +96,14 @@ export function Invoices({ user, settings, onPrint, openNewSignal = 0, offline =
     setErr(''); setBusy(true);
     try { await api.post(`/api/invoices/${id}/print-confirm`, {}); await load(); }
     catch (e) { setErr(`تعذّر تأكيد الطباعة (${(e as ApiError).code})`); }
+    finally { setBusy(false); }
+  }
+
+  // V15's lock step, reachable straight from the register: open -> locked.
+  async function lockInvoice(id: string) {
+    setErr(''); setBusy(true);
+    try { await api.post(`/api/invoices/${id}/lock`, {}); await load(); }
+    catch (e) { setErr(`تعذّر قفل الفاتورة (${(e as ApiError).code})`); }
     finally { setBusy(false); }
   }
 
@@ -250,8 +258,9 @@ export function Invoices({ user, settings, onPrint, openNewSignal = 0, offline =
                 <td data-label="الضرائب"><span className="badge eta">{ETA_LABEL[inv.eta_status] ?? inv.eta_status}</span></td>
                 <td data-label="">
                   <div className="row" style={{ gap: 6 }}>
-                    {inv.status !== 'cancelled' && <button className="btn ghost" onClick={() => onPrint(inv.id)}>طباعة</button>}
-                    {canWrite && inv.status === 'locked' && <button className="btn ghost" onClick={() => printConfirm(inv.id)}>تأكيد الطباعة</button>}
+                    {inv.status !== 'cancelled' && <button className="btn ghost" onClick={() => onPrint(inv.id)} title="طباعة أو معاينة">طباعة</button>}
+                    {canWrite && inv.status === 'open' && <button className="btn ghost" onClick={() => lockInvoice(inv.id)} disabled={busy}>قفل</button>}
+                    {canWrite && inv.status === 'locked' && <button className="btn ghost" onClick={() => printConfirm(inv.id)} disabled={busy}>تأكيد الطباعة</button>}
                     {canWrite && inv.status === 'open' && <button className="btn ghost" onClick={() => openEdit(inv.id, setEditing)}>تعديل</button>}
                   </div>
                 </td>
@@ -343,6 +352,7 @@ function InvoiceEditor({ user, settings, id, initial, onClose, onSaved, onPrint,
   const [nextSerial, setNextSerial] = useState<number | null>(null);
   const [showTax, setShowTax] = useState(false);
   const canWrite = ['admin', 'manager', 'reception'].includes(user.role);
+  const firstFieldRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (id) return;
@@ -354,6 +364,9 @@ function InvoiceEditor({ user, settings, id, initial, onClose, onSaved, onPrint,
     document.addEventListener('keydown', onKey);
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
+    // Focus the guest-name field so the keyboard opens ready to type (the field
+    // is the first thing the receptionist fills in a new invoice).
+    firstFieldRef.current?.focus();
     return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = prevOverflow; };
   }, [onClose]);
 
@@ -468,7 +481,7 @@ function InvoiceEditor({ user, settings, id, initial, onClose, onSaved, onPrint,
       {err && <div className="alert err">{err}</div>}
 
       <div className="grid cols-3">
-        <label className="field">اسم النزيل<input value={draft.guestName} onChange={(e) => setDraft({ ...draft, guestName: e.target.value })} required /></label>
+        <label className="field">اسم النزيل<input ref={firstFieldRef} value={draft.guestName} onChange={(e) => setDraft({ ...draft, guestName: e.target.value })} required /></label>
         <label className="field">رقم الغرفة<input value={draft.roomNumber} onChange={(e) => setDraft({ ...draft, roomNumber: e.target.value })} /></label>
         <label className="field">الرقم الضريبي للنزيل (اختياري)<input dir="ltr" value={draft.receiverTaxId} onChange={(e) => setDraft({ ...draft, receiverTaxId: e.target.value })} /></label>
         <label className="field">تاريخ الدخول<input type="date" value={draft.checkIn} onChange={(e) => setDraft({ ...draft, checkIn: e.target.value })} /></label>

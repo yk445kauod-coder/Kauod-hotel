@@ -210,14 +210,14 @@ describe('API integration', () => {
 
     it('accepts a Bearer write without CSRF (the token is not ambient)', async () => {
       const token = await desktopToken();
-      // A room, not an invoice: creating an invoice would consume a serial and
-      // shift the numbering assertion in the later invoice test.
-      const res = await mf.dispatchFetch(`${base}/api/rooms`, {
-        method: 'POST',
+      // A settings write, not an invoice: creating an invoice would consume a
+      // serial and shift the numbering assertion in the later invoice test.
+      const res = await mf.dispatchFetch(`${base}/api/settings`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ number: 'D-777', type: 'desktop-test', nightlyRate: 100 }),
+        body: JSON.stringify({ hotelName: 'فندق قاعود سبورتنج', hotelNameEn: 'KAOUD SPORTING HOTEL', taxRegistrationNumber: '706904204', activityCode: '5510', vatRate: 14, discountRate: 3, pricesIncludeTax: true, serialStart: 10246, currency: 'EGP' }),
       });
-      expect(res.status).toBe(201);
+      expect(res.status).toBe(200);
     });
 
     it('rejects a garbage Bearer token', async () => {
@@ -269,8 +269,12 @@ describe('API integration', () => {
     expect(lhs).toBe(Math.round(Number(invoice.total) * 100));
     expect(invoice.serial).toBe(10246);
 
-    const early = await req(`/api/invoices/${invoice.id}/print`, {}, ctx);
-    expect(early.status).toBe(409);
+    // An open invoice is printable as a DRAFT preview (the whole point of the
+    // new print flow): the payload still carries the full totals + ETA QR.
+    const draft = await req(`/api/invoices/${invoice.id}/print`, {}, ctx);
+    expect(draft.status).toBe(200);
+    const draftBody = await draft.json() as { invoice: { status: string } };
+    expect(draftBody.invoice.status).toBe('open');
 
     const lock = await req(`/api/invoices/${invoice.id}/lock`, { method: 'POST' }, ctx);
     expect(lock.status).toBe(200);
@@ -666,23 +670,44 @@ describe('API integration', () => {
 
   it('applies a write with the same X-Op-Key exactly once', async () => {
     const ctx = await sharedCtx();
-    const body = JSON.stringify({ number: 'op-1', nightlyRate: 100 });
-    const first = await req('/api/rooms', { method: 'POST', headers: { 'X-Op-Key': 'k-rooms-1' } as never, body }, ctx);
-    const second = await req('/api/rooms', { method: 'POST', headers: { 'X-Op-Key': 'k-rooms-1' } as never, body }, ctx);
-    expect(first.status).toBe(201);
-    expect(second.status).toBe(201);
-    const a = await first.json() as { id: string };
-    const b = await second.json() as { id: string };
-    expect(b.id).toBe(a.id);
-    const list = await (await req('/api/rooms', {}, ctx)).json() as { rooms: { number: string }[] };
-    expect(list.rooms.filter((r) => r.number === 'op-1')).toHaveLength(1);
+    const body = JSON.stringify({
+      hotelName: 'فندق قاعود', taxRegistrationNumber: '706904204', activityCode: '5510',
+      vatRate: 14, discountRate: 3, pricesIncludeTax: true, serialStart: 10246, currency: 'EGP',
+      footerNote: 'op-1',
+    });
+    const first = await req('/api/settings', { method: 'PUT', headers: { 'X-Op-Key': 'k-settings-1' } as never, body }, ctx);
+    const second = await req('/api/settings', { method: 'PUT', headers: { 'X-Op-Key': 'k-settings-1' } as never, body }, ctx);
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    const a = await first.json() as { settings: { footer_note: string } };
+    const b = await second.json() as { settings: { footer_note: string } };
+    expect(b.settings.footer_note).toBe(a.settings.footer_note);
+    expect(a.settings.footer_note).toBe('op-1');
   });
 
-  it('accepts a client-supplied id (offline-created row)', async () => {
+  it('accepts a client-supplied id (offline-created invoice)', async () => {
     const ctx = await sharedCtx();
-    const id = newId('room');
-    const res = await req('/api/rooms', { method: 'POST', body: JSON.stringify({ id, number: 'cli-1', nightlyRate: 50 }) }, ctx);
+    const id = newId('inv');
+    const res = await req('/api/invoices', { method: 'POST', body: JSON.stringify({ id, guestName: 'عميل أوفلاين', lines: [{ description: 'خدمة', qty: 1, unitPrice: 50 }] }) }, ctx);
     expect(res.status).toBe(201);
-    expect((await res.json() as { id: string }).id).toBe(id);
+    expect((await res.json() as { invoice: { id: string } }).invoice.id).toBe(id);
+  });
+
+  it('lists guest names from active invoices and hides cancelled ones', async () => {
+    const ctx = await sharedCtx();
+    const mk = async (guest: string) => {
+      const r = await req('/api/invoices', { method: 'POST', body: JSON.stringify({ guestName: guest, lines: [{ description: 'x', qty: 1, unitPrice: 100 }] }) }, ctx);
+      return (await r.json() as { invoice: { id: string } }).invoice.id;
+    };
+    const keep = await mk('اسم ظاهر');
+    const drop = await mk('اسم ملغى');
+    expect((await req(`/api/invoices/${drop}/cancel`, { method: 'POST', body: JSON.stringify({ reason: 'test' }) }, ctx)).status).toBe(200);
+
+    const body = await (await req('/api/directory/names', {}, ctx)).json() as { names: { name: string; invoices: number }[] };
+    const names = body.names.map((n) => n.name);
+    expect(names).toContain('اسم ظاهر');
+    expect(names).not.toContain('اسم ملغى');
+    expect(body.names.find((n) => n.name === 'اسم ظاهر')!.invoices).toBeGreaterThan(0);
+    expect(keep).toBeTruthy();
   });
 });
