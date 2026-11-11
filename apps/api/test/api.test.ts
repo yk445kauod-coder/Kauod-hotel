@@ -270,6 +270,42 @@ describe('API integration', () => {
   });
 
 
+  describe('clear-all-data', () => {
+    async function makeReception(): Promise<Ctx> {
+      const owner = await bootstrapAndLogin();
+      await req('/api/users', { method: 'POST', body: JSON.stringify({ username: 'recep1', name: 'موظف', password: 'Recep@2026x', role: 'reception' }) }, owner);
+      return login('recep1', 'Recep@2026x');
+    }
+
+    it('refuses a non-owner', async () => {
+      const emp = await makeReception();
+      const r = await req('/api/admin/clear-data', { method: 'POST', body: JSON.stringify({ confirm: 'مسح' }) }, emp);
+      expect(r.status).toBe(403);
+    });
+
+    it('refuses a wrong confirmation word', async () => {
+      const owner = await bootstrapAndLogin();
+      const r = await req('/api/admin/clear-data', { method: 'POST', body: JSON.stringify({ confirm: 'delete' }) }, owner);
+      expect(r.status).toBe(400);
+    });
+
+    it('keeps users and re-seeds the counter so creation still works', async () => {
+      const owner = await bootstrapAndLogin();
+      const before = await req('/api/invoices', { method: 'POST', body: JSON.stringify({ guestName: 'wipe-me', lines: [{ description: 'x', qty: 1, unitPrice: 100 }] }) }, owner);
+      expect(before.status).toBe(201);
+
+      const r = await req('/api/admin/clear-data', { method: 'POST', body: JSON.stringify({ confirm: 'مسح' }) }, owner);
+      expect(r.status).toBe(200);
+
+      // users survive the wipe
+      expect((await req('/api/users', {}, owner)).status).toBe(200);
+      // and creation still works (counter was re-seeded, not deleted)
+      const after = await req('/api/invoices', { method: 'POST', body: JSON.stringify({ guestName: 'fresh', lines: [{ description: 'x', qty: 1, unitPrice: 100 }] }) }, owner);
+      expect(after.status).toBe(201);
+    });
+  });
+
+
   it('allocates sequential serials and blocks lowering below max', async () => {
     const ctx = await bootstrapAndLogin();
     const mk = async () => (await (await req('/api/invoices', { method: 'POST', body: JSON.stringify({ guestName: 'g', lines: [{ description: 'x', qty: 1, unitPrice: 100 }] }) }, ctx)).json() as { invoice: { serial: number } }).invoice.serial;

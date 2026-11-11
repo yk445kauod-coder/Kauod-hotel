@@ -410,3 +410,26 @@ adminRoutes.get('/api/serial/review', requireAuth(), requireRole('admin', 'manag
   }
   return c.json({ start, max, entries });
 });
+
+// ---------- owner-only: wipe operational data ----------
+// V15's "clear all data", made safe: owner only, typed confirmation, and it
+// never touches users/sessions/settings/tenants or the audit log. `counters`
+// is re-seeded from settings.serial_start rather than deleted, otherwise every
+// later create would fail with counter_missing.
+adminRoutes.post('/api/admin/clear-data', requireAuth(), async (c) => {
+  const db = c.get('db');
+  const auth = c.get('auth').user;
+  const { tenantId, id: userId } = auth;
+  if (!auth.isOwner) return c.json({ error: 'forbidden' }, 403);
+  const body = await c.req.json().catch(() => ({})) as { confirm?: string };
+  if (body.confirm !== 'مسح') return c.json({ error: 'bad_confirm' }, 400);
+
+  const tables = ['invoice_lines', 'payments', 'eta_queue', 'invoices', 'reservations', 'guests', 'rooms', 'device_serials', 'op_ids', 'op_log', 'backups'];
+  await db.batch(tables.map((t) => ({ sql: `DELETE FROM ${t} WHERE tenant_id = ?`, params: [tenantId] })));
+  await db.run(
+    `INSERT OR REPLACE INTO counters (tenant_id, next_serial, next_override)
+     VALUES (?, COALESCE((SELECT serial_start FROM settings WHERE tenant_id = ?), 10246), NULL)`,
+    [tenantId, tenantId]);
+  await audit(db, { tenantId, userId, action: 'admin.clear_data', entity: 'tenant', entityId: tenantId, detail: { tables }, ip: clientIp(c) });
+  return c.json({ ok: true });
+});

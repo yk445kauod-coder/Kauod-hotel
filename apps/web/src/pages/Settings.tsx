@@ -7,6 +7,7 @@ export function SettingsPage({ user, onSaved }: { user: SessionUser; onSaved: ()
   const [s, setS] = useState<Settings | null>(null);
   const [msg, setMsg] = useState(''); const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const [clearWord, setClearWord] = useState('');
   const canEdit = ['admin', 'manager'].includes(user.role);
   const isAdmin = user.role === 'admin';
 
@@ -68,6 +69,19 @@ export function SettingsPage({ user, onSaved }: { user: SessionUser; onSaved: ()
       const ae = e as ApiError;
       setErr(ae.code === 'invalid_json' ? 'الملف ليس ملف نسخة احتياطية صالحًا' : `تعذّر الاستيراد (${ae.code ?? 'error'})`);
     } finally { setBusy(false); }
+  }
+
+  async function clearData() {
+    if (clearWord !== 'مسح') return;
+    if (!window.confirm('سيتم حذف كل الفواتير والغرف والنزلاء والحجوزات نهائيًا. المستخدمون والإعدادات لن تتأثر. هل أنت متأكد؟')) return;
+    setErr(''); setMsg(''); setBusy(true);
+    try {
+      await api.post('/api/admin/clear-data', { confirm: 'مسح' });
+      setMsg('تم مسح البيانات التشغيلية');
+      setClearWord('');
+      onSaved();
+    } catch (e) { setErr(`تعذّر المسح (${(e as ApiError).code})`); }
+    finally { setBusy(false); }
   }
 
   if (!s) return <div className="muted">جارٍ التحميل…</div>;
@@ -152,6 +166,20 @@ export function SettingsPage({ user, onSaved }: { user: SessionUser; onSaved: ()
             </label>
           </div>
           <div className="muted" style={{ marginTop: 8, fontSize: 12 }}>الاستيراد يستبدل البيانات الحالية بالكامل. حسابات المستخدمين وكلمات المرور لا تتأثر.</div>
+        </div>
+      )}
+
+      {user.isOwner && (
+        <div className="card" style={{ borderColor: 'var(--danger-border)' }}>
+          <h3>مسح كل البيانات (للمالك فقط)</h3>
+          <p className="muted" style={{ marginTop: 0 }}>
+            يحذف كل الفواتير والبنود والمدفوعات والغرف والنزلاء والحجوزات وسجل الأرقام المحجوزة.
+            المستخدمون وكلمات المرور والإعدادات والسجل لا تتأثر. اكتب كلمة «مسح» للتأكيد.
+          </p>
+          <div className="row" style={{ gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+            <input value={clearWord} onChange={(e) => setClearWord(e.target.value)} placeholder="اكتب: مسح" style={{ maxWidth: 200 }} />
+            <button className="btn danger" disabled={busy || clearWord !== 'مسح'} onClick={clearData}>مسح كل البيانات</button>
+          </div>
         </div>
       )}
     </>
