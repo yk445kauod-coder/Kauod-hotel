@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, ApiError } from '../api';
 import { downloadJson, readJsonFile } from '../exports';
 import { confirmDialog } from '../alert';
+import { UpdaterCard } from '../components/Updater';
 import type { SessionUser, Settings } from '../types';
 
 export function SettingsPage({ user, onSaved }: { user: SessionUser; onSaved: () => void }) {
@@ -168,7 +169,7 @@ export function SettingsPage({ user, onSaved }: { user: SessionUser; onSaved: ()
       {isAdmin && (
         <div className="card">
           <h3>النسخ الاحتياطي والاستيراد</h3>
-          <p className="muted" style={{ marginTop: 0 }}>نزّل نسخة كاملة من بيانات الفندق (إعدادات، فواتير، بنود، مدفوعات، غرف، نزلاء، حجوزات) بصيغة JSON، أو استعِد نسخة سابقة.</p>
+          <p className="muted" style={{ marginTop: 0 }}>نزّل نسخة كاملة من بيانات الفندق (إعدادات، فواتير، بنود، مدفوعات) بصيغة JSON، أو استعِد نسخة سابقة.</p>
           {msg && <div className="alert ok">{msg}</div>}
           {err && <div className="alert err">{err}</div>}
           <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
@@ -181,6 +182,8 @@ export function SettingsPage({ user, onSaved }: { user: SessionUser; onSaved: ()
           <div className="muted" style={{ marginTop: 8, fontSize: 12 }}>الاستيراد يستبدل البيانات الحالية بالكامل. حسابات المستخدمين وكلمات المرور لا تتأثر.</div>
         </div>
       )}
+
+      <UpdaterCard />
 
       {user.isOwner && (
         <div className="card" style={{ borderColor: 'var(--danger-border)' }}>

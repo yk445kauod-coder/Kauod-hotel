@@ -732,26 +732,39 @@ td.num, th.num { text-align: end; font-variant-numeric: tabular-nums; direction:
 .inv-editor .spread h3 { margin: 0; }
 
 @media print {
-  html, body { background: #fff !important; }
+  /* An A4 document must be allowed to flow over as many pages as it needs, so
+     nothing on the page chain may clip or fix the height. `height:100%` on
+     html/body/#root and any `overflow:hidden` would confine the invoice to a
+     single page and cut a long invoice off. */
+  html, body, #root { height: auto !important; overflow: visible !important; background: #fff !important; }
   .app, .sidebar, .topbar, .no-print, .bottom-nav, .qc, .guide-scrim, .inv-editor-scrim, .hint-bar { display: none !important; }
   .print-area { display: block !important; padding: 0 !important; }
   .inv {
     display: block !important;
     max-width: none !important;
-    width: 100%;
+    width: 100% !important;
     margin: 0 !important;
     border: 0 !important;
     border-radius: 0 !important;
     box-shadow: none !important;
+    /* the key line: without this the whole article is treated as one
+       unfragmentable box and a big invoice is clipped instead of paginated */
+    overflow: visible !important;
   }
   .inv, .inv * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  /* repeat the column header on every page of a long invoice */
-  .inv-table thead { display: table-header-group; }
+  /* Repeat the column header on every page of a long line-item table. */
+  .inv-table { overflow: visible !important; border-radius: 0 !important; }
+  .inv-table thead { display: table-header-group; break-after: avoid; page-break-after: avoid; }
   .inv-table tfoot { display: table-footer-group; }
-  /* keep blocks together instead of splitting them across pages */
-  .inv-hd, .inv-guest, .inv-lower, .inv-signs, .inv-ft, .inv-table tr { break-inside: avoid; page-break-inside: avoid; }
-  .inv-table thead { break-after: avoid; page-break-after: avoid; }
-  @page { size: A4; margin: 12mm 12mm 14mm; }
+  .inv-table tr { break-inside: avoid; page-break-inside: avoid; }
+  /* Keep cohesive blocks whole rather than splitting a signature or the totals
+     block across a page boundary. The line-item table is deliberately NOT in
+     this list so it can break across pages. */
+  .inv-hd, .inv-guest, .inv-lower, .inv-signs, .inv-ft, .inv-totals, .inv-pay-table { break-inside: avoid; page-break-inside: avoid; }
+  /* Draft / cancelled watermarks become fixed so they stamp every printed page. */
+  .inv-cancel-watermark, .inv-draft-watermark { position: fixed; }
+  /* A4 portrait with 12mm side/top and 14mm bottom margins. */
+  @page { size: A4 portrait; margin: 12mm 12mm 14mm; }
 }
 
 @media (prefers-reduced-motion: reduce) {
