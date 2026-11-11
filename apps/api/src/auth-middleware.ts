@@ -2,6 +2,7 @@ import type { Context, Next } from 'hono';
 import { Db, type AuthContext, type Env, type SessionUser } from './db.js';
 import { parseCookies, SESSION_COOKIE, CSRF_COOKIE, clientIp } from './http.js';
 import { sha256Hex, timingSafeEqual } from './crypto.js';
+import { ensureDailyBackup } from './backups.js';
 
 declare module 'hono' {
   interface ContextVariableMap {
@@ -62,6 +63,11 @@ export function requireAuth() {
       csrf: row.csrf,
       sessionTokenHash: tokenHash,
     });
+    // Lazy daily backup: the first authenticated GET of the day writes a
+    // snapshot. A backup failure must never break the request.
+    if (c.req.method === 'GET') {
+      try { await ensureDailyBackup(db, row.tenant_id); } catch { /* ignore */ }
+    }
     await next();
   };
 }

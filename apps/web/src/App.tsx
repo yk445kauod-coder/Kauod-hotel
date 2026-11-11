@@ -47,6 +47,8 @@ export function App() {
   const [error, setError] = useState('');
   const [offlineMode, setOfflineMode] = useState(isOfflineEnabled());
   const [guideOpen, setGuideOpen] = useState(false);
+  const [backupDay, setBackupDay] = useState<string | null>(null);
+  const [dismissedBackup, setDismissedBackup] = useState(false);
   const { theme, toggle: toggleTheme } = useTheme();
   const { online, pending, syncing, sync, refreshPending } = useOfflineSync();
 
@@ -97,6 +99,14 @@ export function App() {
         const me = await api.get<{ user: SessionUser }>('/api/me');
         setUser(me.user);
         await loadSettings();
+        try {
+          const b = await api.get<{ days: { day: string }[] }>('/api/backups');
+          const today = new Date().toISOString().slice(0, 10);
+          if (b.days.some((x) => x.day === today)) {
+            setBackupDay(today);
+            setDismissedBackup(localStorage.getItem(`kaoud.backup.banner.${today}`) === '1');
+          }
+        } catch { /* banner is optional */ }
       } catch (e) {
         if (!(e instanceof ApiError) || e.status !== 401) setError('تعذّر الاتصال بالخدمة');
       } finally { setLoading(false); }
@@ -257,6 +267,18 @@ export function App() {
         </header>
         <div className="content no-print">
           {error && <div className="alert err">{error}</div>}
+          {backupDay && !dismissedBackup && (
+            <div className="alert warn" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <span style={{ flex: 1, minWidth: 200 }}>نسخة اليوم ({backupDay}) جاهزة — احفظها على فلاشة أو درايف.</span>
+              <button className="btn" onClick={async () => {
+                try {
+                  const r = await api.get<{ payload: unknown }>(`/api/backups/${backupDay}`);
+                  downloadJson(`Kaoud_Backup_${backupDay}.json`, r.payload);
+                } catch { setError('تعذّر تحميل النسخة الاحتياطية'); }
+              }}>تحميل نسخة احتياطية</button>
+              <button className="btn ghost" onClick={() => { setDismissedBackup(true); localStorage.setItem(`kaoud.backup.banner.${backupDay}`, '1'); }}>إخفاء</button>
+            </div>
+          )}
           <TopHints onOpenGuide={() => setGuideOpen(true)} />
           {tab === 'dashboard' && <Dashboard user={user} onOpenInvoice={(id) => { setPrintId(id); }} onNewInvoice={() => { setTab('invoices'); setNewInvoiceSignal((n) => n + 1); }} />}
           {tab === 'invoices' && <Invoices user={user} settings={settings} onPrint={(id) => setPrintId(id)} openNewSignal={newInvoiceSignal} offline={offlineMode} online={online} onQueued={onSynced} />}

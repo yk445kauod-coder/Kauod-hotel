@@ -247,6 +247,29 @@ describe('API integration', () => {
     });
   });
 
+  it('writes at most one daily backup snapshot per tenant', async () => {
+    const ctx = await sharedCtx();
+    await req('/api/settings', {}, ctx);
+    await req('/api/settings', {}, ctx);
+    const r = await req('/api/backups', {}, ctx);
+    expect(r.status).toBe(200);
+    const body = await r.json() as { days: { day: string }[] };
+    const today = new Date().toISOString().slice(0, 10);
+    expect(body.days.filter((x) => x.day === today)).toHaveLength(1);
+  });
+
+  it('serves a stored backup payload by day', async () => {
+    const ctx = await sharedCtx();
+    await req('/api/settings', {}, ctx);
+    const day = new Date().toISOString().slice(0, 10);
+    const r = await req(`/api/backups/${day}`, {}, ctx);
+    expect(r.status).toBe(200);
+    const body = await r.json() as { payload: { invoices: unknown[]; settings: unknown } };
+    expect(Array.isArray(body.payload.invoices)).toBe(true);
+    expect(body.payload.settings).toBeTruthy();
+  });
+
+
   it('allocates sequential serials and blocks lowering below max', async () => {
     const ctx = await bootstrapAndLogin();
     const mk = async () => (await (await req('/api/invoices', { method: 'POST', body: JSON.stringify({ guestName: 'g', lines: [{ description: 'x', qty: 1, unitPrice: 100 }] }) }, ctx)).json() as { invoice: { serial: number } }).invoice.serial;

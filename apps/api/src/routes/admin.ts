@@ -6,6 +6,7 @@ import { requireAuth, requireRole } from '../auth-middleware.js';
 import { hashPassword } from '../crypto.js';
 import { audit, newId } from '../audit.js';
 import { loadSettings, loadCounter, previewNextSerial } from '../settings.js';
+import { buildExportPayload } from '../backups.js';
 import { clientIp } from '../http.js';
 
 export const adminRoutes = new Hono<{ Bindings: Env }>();
@@ -286,18 +287,26 @@ adminRoutes.get('/api/monitor/users', requireAuth(), requireRole('admin', 'manag
 adminRoutes.get('/api/export', requireAuth(), requireRole('admin'), async (c) => {
   const db = c.get('db');
   const tenantId = c.get('auth').user.tenantId;
-  const [settings, counter, invoices, lines, payments, rooms, guests, reservations, users] = await Promise.all([
-    loadSettings(db, tenantId),
-    loadCounter(db, tenantId),
-    db.all(`SELECT * FROM invoices WHERE tenant_id = ?`, [tenantId]),
-    db.all(`SELECT * FROM invoice_lines WHERE tenant_id = ?`, [tenantId]),
-    db.all(`SELECT * FROM payments WHERE tenant_id = ?`, [tenantId]),
-    db.all(`SELECT * FROM rooms WHERE tenant_id = ?`, [tenantId]),
-    db.all(`SELECT * FROM guests WHERE tenant_id = ?`, [tenantId]),
-    db.all(`SELECT * FROM reservations WHERE tenant_id = ?`, [tenantId]),
-    db.all(`SELECT id, username, name, role, active, is_owner, created_at FROM users WHERE tenant_id = ?`, [tenantId]),
-  ]);
-  return c.json({ exportedAt: new Date().toISOString(), version: 1, settings, counter, invoices, lines, payments, rooms, guests, reservations, users });
+  return c.json(await buildExportPayload(db, tenantId));
+});
+
+// ---------- daily snapshots ----------
+adminRoutes.get('/api/backups', requireAuth(), async (c) => {
+  const db = c.get('db');
+  const tenantId = c.get('auth').user.tenantId;
+  const rows = await db.all<{ day: string; created_at: string }>(
+    `SELECT day, created_at FROM backups WHERE tenant_id = ? ORDER BY day DESC`, [tenantId]);
+  return c.json({ days: rows.map((r) => ({ day: r.day, createdAt: r.created_at })) });
+});
+
+adminRoutes.get('/api/backups/:day', requireAuth(), async (c) => {
+  const db = c.get('db');
+  const tenantId = c.get('auth').user.tenantId;
+  const row = await db.one<{ day: string; payload: string; created_at: string }>(
+    `SELECT day, payload, created_at FROM backups WHERE tenant_id = ? AND day = ?`,
+    [tenantId, c.req.param('day') ?? '']);
+  if (!row) return c.json({ error: 'not_found' }, 404);
+  return c.json({ day: row.day, createdAt: row.created_at, payload: JSON.parse(row.payload) });
 });
 
 // ---------- restore a backup produced by /api/export ----------
