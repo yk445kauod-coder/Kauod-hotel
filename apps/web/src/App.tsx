@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { api, ApiError } from './api';
+import { api, ApiError, setToken } from './api';
 import type { SessionUser, Settings } from './types';
 import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
@@ -15,7 +15,7 @@ import { MonitoringPage } from './pages/Monitoring';
 import { ROLE_LABEL } from './format';
 import { useTheme } from './theme';
 import { useOfflineSync } from './useOffline';
-import { isOfflineEnabled, setOfflineEnabled, reserveBlock, releaseBlock, cacheSettings, pendingCount } from './offline';
+import { isOfflineEnabled, setOfflineEnabled, reserveBlock, releaseBlock, cacheSettings, pendingCount, cacheSession, getCachedSession, clearSession } from './offline';
 import { pendingOps } from './outbox';
 import { QuickCenter } from './components/QuickCenter';
 import { Guide } from './components/Guide';
@@ -99,6 +99,7 @@ export function App() {
       try {
         const me = await api.get<{ user: SessionUser }>('/api/me');
         setUser(me.user);
+        await cacheSession(me.user);
         await loadSettings();
         try {
           const b = await api.get<{ days: { day: string }[] }>('/api/backups');
@@ -109,7 +110,21 @@ export function App() {
           }
         } catch { /* banner is optional */ }
       } catch (e) {
-        if (!(e instanceof ApiError) || e.status !== 401) setError('تعذّر الاتصال بالخدمة');
+        if (e instanceof ApiError && e.status === 401) {
+          // The session is genuinely gone: drop the cached copy and show login.
+          await clearSession().catch(() => {});
+        } else {
+          // Network/server trouble: open from the cached session so the desk can
+          // keep working offline. The server is still the source of truth and
+          // will correct this on the next successful call.
+          const cached = await getCachedSession<SessionUser>().catch(() => null);
+          if (cached?.user) {
+            setUser(cached.user);
+            await loadSettings();
+          } else if (!(e instanceof ApiError)) {
+            setError('تعذّر الاتصال بالخدمة');
+          }
+        }
       } finally { setLoading(false); }
     })();
   }, [loadSettings]);
@@ -164,6 +179,8 @@ export function App() {
     }
     setError('');
     try { await api.post('/api/auth/logout'); } catch { /* ignore */ }
+    await clearSession().catch(() => {});
+    setToken(null);
     setUser(null); setSettings(null);
   };
 

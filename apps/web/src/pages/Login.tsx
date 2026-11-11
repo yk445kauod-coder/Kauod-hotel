@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, ApiError } from '../api';
+import { api, ApiError, setToken } from '../api';
 import type { SessionUser } from '../types';
 import { Icon } from '../components/Icon';
 
@@ -35,7 +35,11 @@ export function Login({ onLogin }: { onLogin: (u: SessionUser) => void }) {
         await api.post('/api/bootstrap', { tenantName, username, name, password });
       }
       const body = mode === 'setup' ? { username, password } : { username };
-      const res = await api.post<{ user: SessionUser }>('/api/auth/login', body);
+      const res = await api.post<{ user: SessionUser; token?: string }>('/api/auth/login', body);
+      // The desktop shell identifies itself as X-Client: desktop, so the server
+      // also returns a raw token; persist it for later Bearer requests. The
+      // browser never gets one, so this is a no-op there.
+      if (res.token) setToken(res.token);
       onLogin(res.user);
     } catch (e2) {
       const ae = e2 as ApiError;

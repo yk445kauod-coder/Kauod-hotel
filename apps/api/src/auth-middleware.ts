@@ -17,7 +17,13 @@ export function requireAuth() {
   return async (c: Context<{ Bindings: Env }>, next: Next) => {
     const db = new Db(c.env.DB);
     const cookies = parseCookies(c.req.header('Cookie') ?? null);
-    const token = cookies[SESSION_COOKIE];
+    // Two credential carriers: an HttpOnly cookie (browser SPA) or an explicit
+    // Bearer token (the desktop shell, whose origin cannot send the cookie).
+    // The Bearer path skips the CSRF double-submit below: the token is not
+    // ambient, so a cross-site request cannot forge it.
+    const authz = c.req.header('Authorization') ?? '';
+    const bearer = authz.startsWith('Bearer ') ? authz.slice(7).trim() : '';
+    const token = bearer || cookies[SESSION_COOKIE];
     if (!token) return c.json({ error: 'unauthorized' }, 401);
 
     const tokenHash = await sha256Hex(token);
@@ -41,7 +47,7 @@ export function requireAuth() {
 
     const csrfHeader = c.req.header('X-CSRF-Token') ?? '';
     const csrfCookie = cookies[CSRF_COOKIE] ?? '';
-    const needsCsrf = !SAFE_METHODS.has(c.req.method);
+    const needsCsrf = !SAFE_METHODS.has(c.req.method) && !bearer;
     if (needsCsrf) {
       const okHeader = csrfHeader && timingSafeEqual(csrfHeader, row.csrf);
       const okCookie = csrfCookie && timingSafeEqual(csrfCookie, row.csrf);

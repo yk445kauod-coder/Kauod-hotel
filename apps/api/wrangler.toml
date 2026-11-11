@@ -8,6 +8,9 @@ ENVIRONMENT = "production"
 APP_ORIGIN = "https://kaoud-hotel.pages.dev"
 # Comma-separated extra origins (Pages previews / custom domains) go here.
 APP_ORIGIN_EXTRA = ""
+# Extra desktop-shell origins beyond the built-in defaults
+# (http://tauri.localhost, app://kaoud).
+DESKTOP_ORIGINS = ""
 
 [[d1_databases]]
 binding = "DB"

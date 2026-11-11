@@ -1,0 +1,61 @@
+name: desktop-shell
+
+# Builds the Windows exe that bundles the whole web app (opens offline, syncs
+# online). Runs on windows-latest because electron-builder needs a Windows
+# host to produce the NSIS installer and portable exe.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/desktop-shell/**'
+      - 'apps/web/**'
+      - 'packages/core/**'
+      - '.github/workflows/desktop-shell.yml'
+  pull_request:
+    paths:
+      - 'apps/desktop-shell/**'
+      - 'apps/web/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: apps/desktop-shell
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        working-directory: .
+        run: npm ci
+
+      - name: Build web app
+        working-directory: .
+        run: npm run build -w @kaoud/web
+
+      - name: Install shell dependencies
+        run: npm ci || npm install
+
+      - name: Bundle web output into the shell
+        shell: bash
+        run: |
+          rm -rf app
+          mkdir -p app
+          cp -r ../web/dist/. app/
+          cp ../web/public/icon-512.png icon.png
+
+      - name: Package Windows exe
+        run: npx electron-builder --win --x64 --config electron-builder.yml
+        env:
+          KAOUD_API_BASE: https://kaoud-hotel-api.yk445kauod.workers.dev
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kaoud-hotel-desktop-shell
+          path: apps/desktop-shell/dist/*.exe
+          if-no-files-found: error

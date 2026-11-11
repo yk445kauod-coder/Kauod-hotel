@@ -37,7 +37,18 @@ export function clearCookies(): string[] {
 }
 
 export function allowedOrigins(env: Env): string[] {
-  const raw = [env.APP_ORIGIN ?? '', ...(env.APP_ORIGIN_EXTRA ?? '').split(',')];
+  const raw = [
+    env.APP_ORIGIN ?? '',
+    ...(env.APP_ORIGIN_EXTRA ?? '').split(','),
+    // Desktop shell origins: Tauri on Windows serves the app from
+    // `http://tauri.localhost`; the Electron shell uses a custom `app://` scheme
+    // so it has a real, non-null origin. Both are listed so neither needs env
+    // changes, and `DESKTOP_ORIGINS` allows extra ones per deployment.
+    ...(env.DESKTOP_ORIGINS ?? '').split(','),
+    'http://tauri.localhost',
+    'https://tauri.localhost',
+    'app://kaoud',
+  ];
   return raw.map((s) => s.trim()).filter(Boolean);
 }
 
@@ -45,7 +56,7 @@ export function corsHeaders(env: Env, origin: string | null): Record<string, str
   const allowed = allowedOrigins(env);
   const headers: Record<string, string> = {
     'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, X-CSRF-Token, X-Op-Key',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-CSRF-Token, X-Op-Key, X-Client',
     'Access-Control-Max-Age': '600',
     Vary: 'Origin',
   };

@@ -1,0 +1,43 @@
+# Builds a self-contained Windows exe that bundles the whole web app (so it
+# opens offline) plus the Electron/Chromium runtime (so it needs no install,
+# even on Windows 7). The web app's built output is copied in as `app/` by the
+# build script before electron-builder runs.
+appId: com.kaoud.hotel
+productName: KaoudHotel
+copyright: Kaoud Sporting Hotel
+
+directories:
+  output: dist
+  buildResources: build
+
+# Only ship the shell code + the bundled web app; never the repo or node_modules.
+files:
+  - main.js
+  - preload.js
+  - smoke.js
+  - icon.png
+  - app/**/*
+  - package.json
+
+extraMetadata:
+  main: main.js
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+  icon: icon.png
+  # Electron 22 is the last line that runs on Windows 7/8.1.
+  artifactName: KaoudHotel-Win7-${version}-${arch}.${ext}
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  shortcutName: نظام فواتير قاعود
+
+portable:
+  artifactName: KaoudHotel-Win7-Portable-${version}.${ext}

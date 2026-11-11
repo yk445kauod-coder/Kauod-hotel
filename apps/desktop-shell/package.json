@@ -1,0 +1,15 @@
+{
+  "name": "@kaoud/desktop-shell",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Windows shell that runs the Kaoud Hotel web app offline and online",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:win": "electron-builder --win --x64 --config electron-builder.yml"
+  },
+  "devDependencies": {
+    "electron": "22.3.27",
+    "electron-builder": "^24.9.1"
+  }
+}

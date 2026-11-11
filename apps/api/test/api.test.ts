@@ -169,6 +169,90 @@ describe('API integration', () => {
     expect(res.status).toBe(403);
   });
 
+  describe('desktop shell auth (Bearer token)', () => {
+    // Log in once as the desktop client and reuse the token, so the extra tests
+    // do not push the shared per-IP login rate limit over its ceiling. A distinct
+    // client IP gives these logins their own rate-limit bucket.
+    const DESK_IP = '10.9.9.9';
+    let desktopTokenPromise: Promise<string> | null = null;
+    const desktopToken = (): Promise<string> => {
+      if (!desktopTokenPromise) {
+        desktopTokenPromise = (async () => {
+          await bootstrapAndLogin();
+          const res = await req('/api/auth/login', {
+            method: 'POST', body: JSON.stringify({ username: 'owner' }),
+            headers: { 'X-Client': 'desktop', 'CF-Connecting-IP': DESK_IP },
+          });
+          const body = await res.json() as { token?: string };
+          return body.token ?? '';
+        })();
+      }
+      return desktopTokenPromise;
+    };
+
+    it('returns a token only when the client identifies as desktop', async () => {
+      await bootstrapAndLogin();
+      const web = await req('/api/auth/login', {
+        method: 'POST', body: JSON.stringify({ username: 'owner' }), headers: { 'CF-Connecting-IP': DESK_IP },
+      });
+      const webBody = await web.json() as { token?: string };
+      expect(webBody.token).toBeUndefined();
+      expect((await desktopToken()).length).toBeGreaterThan(20);
+    });
+
+    it('accepts the Bearer token on protected reads', async () => {
+      const token = await desktopToken();
+      const me = await mf.dispatchFetch(`${base}/api/me`, { headers: { Authorization: `Bearer ${token}` } });
+      expect(me.status).toBe(200);
+      const body = await me.json() as { user: { username: string } };
+      expect(body.user.username).toBe('owner');
+    });
+
+    it('accepts a Bearer write without CSRF (the token is not ambient)', async () => {
+      const token = await desktopToken();
+      // A room, not an invoice: creating an invoice would consume a serial and
+      // shift the numbering assertion in the later invoice test.
+      const res = await mf.dispatchFetch(`${base}/api/rooms`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ number: 'D-777', type: 'desktop-test', nightlyRate: 100 }),
+      });
+      expect(res.status).toBe(201);
+    });
+
+    it('rejects a garbage Bearer token', async () => {
+      const res = await mf.dispatchFetch(`${base}/api/invoices`, { headers: { Authorization: 'Bearer not-a-real-token' } });
+      expect(res.status).toBe(401);
+    });
+  });
+
+  describe('CORS for the desktop shell', () => {
+    it('echoes an allowed desktop origin (app://kaoud) with credentials', async () => {
+      const res = await mf.dispatchFetch(`${base}/api/health`, { headers: { Origin: 'app://kaoud' } });
+      expect(res.headers.get('access-control-allow-origin')).toBe('app://kaoud');
+      expect(res.headers.get('access-control-allow-credentials')).toBe('true');
+    });
+
+    it('echoes the Tauri origin used on Windows', async () => {
+      const res = await mf.dispatchFetch(`${base}/api/health`, { headers: { Origin: 'http://tauri.localhost' } });
+      expect(res.headers.get('access-control-allow-origin')).toBe('http://tauri.localhost');
+    });
+
+    it('does not echo an unknown origin', async () => {
+      const res = await mf.dispatchFetch(`${base}/api/health`, { headers: { Origin: 'https://evil.example' } });
+      expect(res.headers.get('access-control-allow-origin')).toBeNull();
+    });
+
+    it('allows the Authorization and X-Client headers on preflight', async () => {
+      const res = await mf.dispatchFetch(`${base}/api/invoices`, {
+        method: 'OPTIONS', headers: { Origin: 'app://kaoud', 'Access-Control-Request-Headers': 'authorization,x-client' },
+      });
+      const allow = res.headers.get('access-control-allow-headers') ?? '';
+      expect(allow.toLowerCase()).toContain('authorization');
+      expect(allow.toLowerCase()).toContain('x-client');
+    });
+  });
+
   it('creates a consistent invoice and enforces the print gate', async () => {
     const ctx = await bootstrapAndLogin();
     const create = await req('/api/invoices', {

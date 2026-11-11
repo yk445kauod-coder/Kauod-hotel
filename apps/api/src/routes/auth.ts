@@ -93,9 +93,14 @@ authRoutes.post('/api/auth/login', async (c) => {
 
   c.header('Set-Cookie', sessionCookie(token, SESSION_TTL_MS / 1000));
   c.header('Set-Cookie', csrfCookie(csrf, SESSION_TTL_MS / 1000), { append: true });
+  // The desktop shell cannot use the cross-origin HttpOnly cookie, so it asks
+  // for the raw token via `X-Client: desktop` and stores it locally. The browser
+  // never sends that header, so a token is never exposed to page scripts (XSS).
+  const wantsToken = (c.req.header('X-Client') ?? '').toLowerCase() === 'desktop';
   return c.json({
     user: { id: user.id, username: user.username, name: user.name, role: user.role, isOwner: !!user.is_owner },
     csrf,
+    ...(wantsToken ? { token } : {}),
   });
 });
 

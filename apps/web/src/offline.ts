@@ -166,6 +166,24 @@ export async function syncNow(): Promise<{ sent: number; failed: number; rejecte
 
 export function isOnline(): boolean { return typeof navigator === 'undefined' ? true : navigator.onLine; }
 
+// ---- offline session -------------------------------------------------------
+// The last known user is cached so the app can open and work offline instead of
+// falling back to the login screen when the network is down. The server session
+// is still the source of truth: a cached user is only trusted while offline; on
+// the next successful call the server's answer replaces it (or clears it on 401).
+
+export async function cacheSession(user: unknown): Promise<void> {
+  await kvSet('session', { user, at: new Date().toISOString() });
+}
+
+export async function getCachedSession<T>(): Promise<{ user: T; at: string } | null> {
+  return (await kvGet<{ user: T; at: string }>('session')) ?? null;
+}
+
+export async function clearSession(): Promise<void> {
+  await kvSet('session', null);
+}
+
 // Cache the tax defaults so invoices can be totalled while offline.
 export function cacheSettings(s: { vat_rate: number; discount_rate: number; prices_include_tax: number }): Promise<void> {
   return kvSet('settings', { vat_rate: s.vat_rate, discount_rate: s.discount_rate, prices_include_tax: s.prices_include_tax }).then(() => undefined);

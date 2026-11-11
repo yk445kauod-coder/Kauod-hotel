@@ -6,6 +6,7 @@ export interface Env {
   ENVIRONMENT: string;
   APP_ORIGIN: string;
   APP_ORIGIN_EXTRA?: string;
+  DESKTOP_ORIGINS?: string;
   // Optional ETA e-invoicing integration
   ETA_CLIENT_ID?: string;
   ETA_CLIENT_SECRET?: string;
