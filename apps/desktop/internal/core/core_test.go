@@ -24,10 +24,10 @@ func TestParseFormatMoney(t *testing.T) {
 
 func input(over func(*InvoiceInput)) InvoiceInput {
 	in := InvoiceInput{
-		GuestName: "أحمد محمد",
-		RoomNumber: "305",
-		CheckIn:  "2026-11-05",
-		CheckOut: "2026-11-08",
+		GuestName:   "أحمد محمد",
+		RoomNumber:  "305",
+		CheckIn:     "2026-11-05",
+		CheckOut:    "2026-11-08",
 		HasDiscount: true, ApplyDiscount: true,
 		Lines: []LineItem{
 			{Description: "إقامة غرفة 305", Qty: 3, UnitPrice: "1000.00", Kind: KindRoom},
@@ -91,7 +91,7 @@ func TestEtaValidatesAndQr(t *testing.T) {
 		Issuer: EtaIssuerConfig{
 			TaxRegistrationNumber: "706904204", Name: "فندق قاعود",
 			ActivityCode: "5510",
-			Address: EtaAddress{Country: "EG", Governate: "Alexandria", RegionCity: "Alexandria", Street: "سبورتنج", BuildingNumber: "-"},
+			Address:      EtaAddress{Country: "EG", Governate: "Alexandria", RegionCity: "Alexandria", Street: "سبورتنج", BuildingNumber: "-"},
 		},
 	})
 	if issues := ValidateEtaDocument(doc); len(issues) != 0 {

@@ -162,12 +162,12 @@ func deref(s *string) string {
 // gatherInput reads the editor widgets into a core.InvoiceInput.
 func (a *App) gatherInput(guest, room, checkIn, checkOut, notes *walk.LineEdit, vatNE, discNE *walk.NumberEdit, applyDisc *walk.CheckBox, rows []lineRow) core.InvoiceInput {
 	in := core.InvoiceInput{
-		GuestName:  strings.TrimSpace(guest.Text()),
-		RoomNumber: strings.TrimSpace(room.Text()),
-		CheckIn:    strings.TrimSpace(checkIn.Text()),
-		CheckOut:   strings.TrimSpace(checkOut.Text()),
-		Notes:      strings.TrimSpace(notes.Text()),
-		HasDiscount: true,
+		GuestName:     strings.TrimSpace(guest.Text()),
+		RoomNumber:    strings.TrimSpace(room.Text()),
+		CheckIn:       strings.TrimSpace(checkIn.Text()),
+		CheckOut:      strings.TrimSpace(checkOut.Text()),
+		Notes:         strings.TrimSpace(notes.Text()),
+		HasDiscount:   true,
 		ApplyDiscount: applyDisc.Checked(),
 	}
 	for _, r := range rows {

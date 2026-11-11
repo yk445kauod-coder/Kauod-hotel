@@ -349,6 +349,14 @@ function InvoiceEditor({ user, settings, id, initial, onClose, onSaved, onPrint,
     api.get<{ nextSerial: number }>('/api/invoices/next-serial').then((r) => setNextSerial(r.nextSerial)).catch(() => {});
   }, [id]);
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = prevOverflow; };
+  }, [onClose]);
+
   const optNum = (v: string): number | undefined => (v.trim() === '' ? undefined : Number(v));
   const taxCfg = {
     vatRate: optNum(draft.vatRate) ?? settings?.vat_rate ?? 14,
@@ -451,7 +459,8 @@ function InvoiceEditor({ user, settings, id, initial, onClose, onSaved, onPrint,
   const nights = nightsBetween(draft.checkIn, draft.checkOut);
 
   return (
-    <div className="card" style={{ borderColor: 'var(--brand)' }}>
+    <div className="inv-editor-scrim no-print" role="dialog" aria-modal="true" aria-label={id ? 'تعديل فاتورة' : 'فاتورة جديدة'}>
+      <div className="card inv-editor">
       <div className="spread">
         <h3>{id ? 'تعديل فاتورة' : `فاتورة جديدة ${nextSerial ? `— رقم ${nextSerial}` : ''}`}</h3>
         <button className="btn ghost" onClick={onClose}>إغلاق</button>
@@ -543,6 +552,7 @@ function InvoiceEditor({ user, settings, id, initial, onClose, onSaved, onPrint,
         <button className="btn primary" disabled={busy || !draft.guestName.trim()} onClick={() => save()}>{id ? 'حفظ التعديلات' : 'إنشاء الفاتورة'}</button>
       </div>
       {id && <div className="muted" style={{ marginTop: 8 }}>ملاحظة: يجب قفل الفاتورة قبل الطباعة أو الإرسال للضرائب.</div>}
+      </div>
     </div>
   );
 }

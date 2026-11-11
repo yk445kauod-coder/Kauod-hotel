@@ -69,13 +69,13 @@ func (a *App) buildToolbar() Widget {
 func (a *App) invoicesPage() []Widget {
 	return []Widget{
 		TableView{
-			AssignTo:             &a.tv,
-			AlternatingRowBG:     true,
-			ColumnsOrderable:     false,
-			ColumnsSizable:       true,
-			LastColumnStretched:  true,
-			Model:                a.invModel,
-			OnItemActivated:      a.openSelected,
+			AssignTo:              &a.tv,
+			AlternatingRowBG:      true,
+			ColumnsOrderable:      false,
+			ColumnsSizable:        true,
+			LastColumnStretched:   true,
+			Model:                 a.invModel,
+			OnItemActivated:       a.openSelected,
 			OnCurrentIndexChanged: func() {},
 			Columns: []TableViewColumn{
 				{Title: "الرقم", Width: 90, Alignment: AlignFar},

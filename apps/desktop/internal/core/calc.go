@@ -35,8 +35,8 @@ type InvoiceInput struct {
 }
 
 type TaxConfig struct {
-	VatRate         float64
-	DiscountRate    float64
+	VatRate          float64
+	DiscountRate     float64
 	PricesIncludeTax bool
 }
 

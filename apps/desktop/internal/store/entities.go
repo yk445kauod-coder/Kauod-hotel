@@ -166,7 +166,9 @@ func (s *Store) Users() ([]model.User, error) { return list[model.User](s, bUser
 // ---- local id mapping ----
 
 // SetLocalID maps a client-generated id to the server id after a successful push.
-func (s *Store) SetLocalID(localID, serverID string) error { return s.put(bLocalIDs, localID, serverID) }
+func (s *Store) SetLocalID(localID, serverID string) error {
+	return s.put(bLocalIDs, localID, serverID)
+}
 
 func (s *Store) ResolveLocalID(localID string) (string, bool) {
 	var v string

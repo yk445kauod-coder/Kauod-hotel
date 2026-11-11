@@ -40,17 +40,17 @@ type EtaTaxableItem struct {
 }
 
 type EtaLine struct {
-	Description   string           `json:"description"`
-	ItemType      string           `json:"itemType"`
-	ItemCode      string           `json:"itemCode"`
-	UnitType      string           `json:"unitType"`
-	Quantity      float64          `json:"quantity"`
-	UnitValue     EtaUnitValue     `json:"unitValue"`
-	SalesTotal    string           `json:"salesTotal"`
-	Discount      EtaDiscount      `json:"discount"`
-	NetTotal      string           `json:"netTotal"`
-	Total         string           `json:"total"`
-	TaxableItems  []EtaTaxableItem `json:"taxableItems"`
+	Description  string           `json:"description"`
+	ItemType     string           `json:"itemType"`
+	ItemCode     string           `json:"itemCode"`
+	UnitType     string           `json:"unitType"`
+	Quantity     float64          `json:"quantity"`
+	UnitValue    EtaUnitValue     `json:"unitValue"`
+	SalesTotal   string           `json:"salesTotal"`
+	Discount     EtaDiscount      `json:"discount"`
+	NetTotal     string           `json:"netTotal"`
+	Total        string           `json:"total"`
+	TaxableItems []EtaTaxableItem `json:"taxableItems"`
 }
 
 type EtaUnitValue struct {
@@ -64,21 +64,21 @@ type EtaDiscount struct {
 }
 
 type EtaDocument struct {
-	Issuer                  EtaParty         `json:"issuer"`
-	Receiver                EtaParty         `json:"receiver"`
-	DocumentType            string           `json:"documentType"`
-	DocumentTypeVersion     string           `json:"documentTypeVersion"`
-	DateTimeIssued          string           `json:"dateTimeIssued"`
-	TaxpayerActivityCode    string           `json:"taxpayerActivityCode"`
-	InternalID              string           `json:"internalID"`
-	InvoiceLines            []EtaLine        `json:"invoiceLines"`
-	TotalDiscountAmount     string           `json:"totalDiscountAmount"`
-	TotalSalesAmount        string           `json:"totalSalesAmount"`
-	NetAmount               string           `json:"netAmount"`
-	TaxTotals               []EtaTaxableItem `json:"taxTotals"`
-	TotalAmount             string           `json:"totalAmount"`
-	ExtraDiscountAmount     string           `json:"extraDiscountAmount"`
-	TotalItemsDiscountAmount string          `json:"totalItemsDiscountAmount"`
+	Issuer                   EtaParty         `json:"issuer"`
+	Receiver                 EtaParty         `json:"receiver"`
+	DocumentType             string           `json:"documentType"`
+	DocumentTypeVersion      string           `json:"documentTypeVersion"`
+	DateTimeIssued           string           `json:"dateTimeIssued"`
+	TaxpayerActivityCode     string           `json:"taxpayerActivityCode"`
+	InternalID               string           `json:"internalID"`
+	InvoiceLines             []EtaLine        `json:"invoiceLines"`
+	TotalDiscountAmount      string           `json:"totalDiscountAmount"`
+	TotalSalesAmount         string           `json:"totalSalesAmount"`
+	NetAmount                string           `json:"netAmount"`
+	TaxTotals                []EtaTaxableItem `json:"taxTotals"`
+	TotalAmount              string           `json:"totalAmount"`
+	ExtraDiscountAmount      string           `json:"extraDiscountAmount"`
+	TotalItemsDiscountAmount string           `json:"totalItemsDiscountAmount"`
 }
 
 type EtaIssuerConfig struct {
@@ -89,13 +89,13 @@ type EtaIssuerConfig struct {
 }
 
 type BuildEtaArgs struct {
-	Serial         int
-	IssuedAt       string
-	ReceiverName   string
-	ReceiverTaxID  string
-	Calc           CalcResult
-	Issuer         EtaIssuerConfig
-	TaxType        string
+	Serial        int
+	IssuedAt      string
+	ReceiverName  string
+	ReceiverTaxID string
+	Calc          CalcResult
+	Issuer        EtaIssuerConfig
+	TaxType       string
 }
 
 func to2(s string) string {
@@ -153,18 +153,18 @@ func BuildEtaDocument(a BuildEtaArgs) EtaDocument {
 		Issuer: EtaParty{Type: "B", ID: a.Issuer.TaxRegistrationNumber, Name: a.Issuer.Name, Address: a.Issuer.Address},
 		Receiver: EtaParty{Type: recvType, ID: recvID, Name: a.ReceiverName,
 			Address: EtaAddress{Country: "EG", Governate: "Alexandria", RegionCity: "Alexandria", Street: "-", BuildingNumber: "-"}},
-		DocumentType:        "I",
-		DocumentTypeVersion: "1.0",
-		DateTimeIssued:      a.IssuedAt,
-		TaxpayerActivityCode: a.Issuer.ActivityCode,
-		InternalID:          fmt.Sprintf("%d", a.Serial),
-		InvoiceLines:        lines,
-		TotalDiscountAmount: to2(a.Calc.Discount),
-		TotalSalesAmount:    a.Calc.SubtotalGross,
-		NetAmount:           a.Calc.SubtotalNet,
-		TaxTotals:           []EtaTaxableItem{{TaxType: taxType, Amount: a.Calc.TaxTotal, Rate: rate}},
-		TotalAmount:         a.Calc.Total,
-		ExtraDiscountAmount: "0.00",
+		DocumentType:             "I",
+		DocumentTypeVersion:      "1.0",
+		DateTimeIssued:           a.IssuedAt,
+		TaxpayerActivityCode:     a.Issuer.ActivityCode,
+		InternalID:               fmt.Sprintf("%d", a.Serial),
+		InvoiceLines:             lines,
+		TotalDiscountAmount:      to2(a.Calc.Discount),
+		TotalSalesAmount:         a.Calc.SubtotalGross,
+		NetAmount:                a.Calc.SubtotalNet,
+		TaxTotals:                []EtaTaxableItem{{TaxType: taxType, Amount: a.Calc.TaxTotal, Rate: rate}},
+		TotalAmount:              a.Calc.Total,
+		ExtraDiscountAmount:      "0.00",
 		TotalItemsDiscountAmount: "0.00",
 	}
 }
@@ -177,7 +177,7 @@ func num(s string) float64 {
 	return float64(m)
 }
 
-// etaCodeSeed mirrors `description.slice(0,4).toUpperCase().replace(/[^A-Z0-9]/g,'') || 'ITEM'`.
+// etaCodeSeed mirrors `description.slice(0,4).toUpperCase().replace(/[^A-Z0-9]/g,”) || 'ITEM'`.
 func etaCodeSeed(desc string) string {
 	r := []rune(desc)
 	if len(r) > 4 {
