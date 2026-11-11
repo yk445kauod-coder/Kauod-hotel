@@ -26,8 +26,9 @@ self.addEventListener('install', (e) => {
     // be stale, since the hashes change on every build.
     try {
       const res = await fetch(new Request('/precache-manifest.json', { cache: 'reload' }));
-      const urls = await res.json();
-      await cache.put('/precache-manifest.json', res.clone());
+      // Clone before reading the body: a Response body can be consumed once.
+      const urls = await res.clone().json();
+      await cache.put('/precache-manifest.json', res);
       await addAll(cache, [...new Set(urls)].filter((u) => typeof u === 'string' && u !== '/sw.js'));
     } catch {
       // No manifest (older build): fall back to the assets referenced by the
