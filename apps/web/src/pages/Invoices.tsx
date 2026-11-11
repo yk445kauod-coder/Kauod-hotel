@@ -78,6 +78,13 @@ export function Invoices({ user, settings, onPrint, openNewSignal = 0, offline =
     setQ(''); setFNum(''); setFDate(''); setFGuest(''); setFRoom(''); setFFrom(''); setFTo(''); setStatus(''); setOffset(0); setInfo('');
   }
 
+  async function printConfirm(id: string) {
+    setErr(''); setBusy(true);
+    try { await api.post(`/api/invoices/${id}/print-confirm`, {}); await load(); }
+    catch (e) { setErr(`تعذّر تأكيد الطباعة (${(e as ApiError).code})`); }
+    finally { setBusy(false); }
+  }
+
   async function searchByNumber() {
     const v = fNum.trim();
     if (!v) { setErr('اكتب رقم الفاتورة الأول'); return; }
@@ -164,6 +171,7 @@ export function Invoices({ user, settings, onPrint, openNewSignal = 0, offline =
             <option value="">كل الحالات</option>
             <option value="open">مفتوحة</option>
             <option value="locked">مقفلة</option>
+            <option value="printed">مطبوعة</option>
             <option value="cancelled">ملغاة</option>
           </select>
           <button className="btn ghost" onClick={clearSearch}>مسح البحث</button>
@@ -228,6 +236,7 @@ export function Invoices({ user, settings, onPrint, openNewSignal = 0, offline =
                 <td data-label="">
                   <div className="row" style={{ gap: 6 }}>
                     {inv.status !== 'cancelled' && <button className="btn ghost" onClick={() => onPrint(inv.id)}>طباعة</button>}
+                    {canWrite && inv.status === 'locked' && <button className="btn ghost" onClick={() => printConfirm(inv.id)}>تأكيد الطباعة</button>}
                     {canWrite && inv.status === 'open' && <button className="btn ghost" onClick={() => openEdit(inv.id, setEditing)}>تعديل</button>}
                   </div>
                 </td>
@@ -253,6 +262,7 @@ export function Invoices({ user, settings, onPrint, openNewSignal = 0, offline =
           initial={editing.draft}
           offline={offline && !editing.id}
           onClose={() => setEditing(null)}
+          onPrint={onPrint}
           onSaved={async () => {
             setEditing(null);
             if (online) { try { await syncNow(); } catch { /* stays queued */ } }
@@ -308,15 +318,16 @@ async function openEdit(id: string, setEditing: (v: { id: string; draft: DraftSt
   });
 }
 
-function InvoiceEditor({ user, settings, id, initial, onClose, onSaved, offline = false }: {
+function InvoiceEditor({ user, settings, id, initial, onClose, onSaved, onPrint, offline = false }: {
   user: SessionUser; settings: Settings | null; id?: string; initial: DraftState;
-  onClose: () => void; onSaved: () => void; offline?: boolean;
+  onClose: () => void; onSaved: () => void; onPrint?: (id: string) => void; offline?: boolean;
 }) {
   const [draft, setDraft] = useState<DraftState>(initial);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [nextSerial, setNextSerial] = useState<number | null>(null);
   const [showTax, setShowTax] = useState(false);
+  const canWrite = ['admin', 'manager', 'reception'].includes(user.role);
 
   useEffect(() => {
     if (id) return;
@@ -341,7 +352,7 @@ function InvoiceEditor({ user, settings, id, initial, onClose, onSaved, offline 
     setDraft((dd) => ({ ...dd, lines: dd.lines.map((l, j) => (j === i ? { ...l, ...patch } : l)) }));
   }
 
-  async function save() {
+  async function save(opts?: { print?: boolean }) {
     setErr(''); setBusy(true);
     try {
       const lines = draft.lines.filter((l) => l.description.trim()).map((l) => ({
@@ -382,7 +393,20 @@ function InvoiceEditor({ user, settings, id, initial, onClose, onSaved, offline 
         lines,
       };
       if (id) await api.put(`/api/invoices/${id}`, body);
-      else await api.post('/api/invoices', body);
+      else if (opts?.print) {
+        // V15's "create and print": lock + confirm print in one flow. Reception
+        // can only create; it must lock from the register (the server would
+        // reject a print-confirm on an open invoice anyway).
+        const created = await api.post<{ invoice: { id: string } }>('/api/invoices', body);
+        const newId = created.invoice.id;
+        if (['admin', 'manager'].includes(user.role)) {
+          await api.post(`/api/invoices/${newId}/lock`, {});
+          await api.post(`/api/invoices/${newId}/print-confirm`, {});
+        }
+        onSaved();
+        onPrint?.(newId);
+        return;
+      } else await api.post('/api/invoices', body);
       onSaved();
     } catch (e) {
       const ae = e as ApiError;
@@ -488,9 +512,10 @@ function InvoiceEditor({ user, settings, id, initial, onClose, onSaved, offline 
 
       <div className="row end" style={{ marginTop: 16 }}>
         <button className="btn" onClick={onClose}>إلغاء</button>
-        {id && user.role !== 'reception' && <button className="btn" disabled={busy} onClick={() => action('lock', 'القفل')}>قفل الفاتورة</button>}
-        {id && user.role !== 'reception' && <button className="btn danger" disabled={busy} onClick={() => action('cancel', 'الإلغاء')}>إلغاء الفاتورة</button>}
-        <button className="btn primary" disabled={busy || !draft.guestName.trim()} onClick={save}>{id ? 'حفظ التعديلات' : 'إنشاء الفاتورة'}</button>
+        {id && canWrite && <button className="btn" disabled={busy} onClick={() => action('lock', 'القفل')}>قفل الفاتورة</button>}
+        {id && ['admin', 'manager'].includes(user.role) && <button className="btn danger" disabled={busy} onClick={() => action('cancel', 'الإلغاء')}>إلغاء الفاتورة</button>}
+        {!id && !offline && ['admin', 'manager'].includes(user.role) && <button className="btn" disabled={busy || !draft.guestName.trim()} onClick={() => save({ print: true })}>إنشاء وطباعة</button>}
+        <button className="btn primary" disabled={busy || !draft.guestName.trim()} onClick={() => save()}>{id ? 'حفظ التعديلات' : 'إنشاء الفاتورة'}</button>
       </div>
       {id && <div className="muted" style={{ marginTop: 8 }}>ملاحظة: يجب قفل الفاتورة قبل الطباعة أو الإرسال للضرائب.</div>}
     </div>
