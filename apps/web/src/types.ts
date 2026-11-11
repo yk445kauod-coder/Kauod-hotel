@@ -4,7 +4,7 @@ export interface SessionUser { id: string; username: string; name: string; role:
 
 export interface InvoiceSummary {
   id: string; serial: number; guest_name: string; room_number: string;
-  check_in: string | null; check_out: string | null; status: 'draft' | 'open' | 'locked' | 'cancelled';
+  check_in: string | null; check_out: string | null; status: 'draft' | 'open' | 'locked' | 'printed' | 'cancelled';
   issued_at: string; subtotal_net: string; subtotal_gross: string; tax_total: string;
   discount: string; total: string; eta_status: string; payment_method?: string; created_at: string;
 }

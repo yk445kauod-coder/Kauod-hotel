@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { IdSchema } from './ids.js';
 
 export const RoleSchema = z.enum(['admin', 'manager', 'reception', 'accountant']);
-export const InvoiceStatusSchema = z.enum(['draft', 'open', 'locked', 'cancelled']);
+export const InvoiceStatusSchema = z.enum(['draft', 'open', 'locked', 'printed', 'cancelled']);
 export const PaymentMethodSchema = z.enum(['cash', 'card', 'instapay', 'bank_transfer', 'other']);
 
 export const LineItemSchema = z.object({

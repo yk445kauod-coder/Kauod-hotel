@@ -1,5 +1,5 @@
 export type Role = 'admin' | 'manager' | 'reception' | 'accountant';
-export type InvoiceStatus = 'draft' | 'open' | 'locked' | 'cancelled';
+export type InvoiceStatus = 'draft' | 'open' | 'locked' | 'printed' | 'cancelled';
 export type PaymentMethod = 'cash' | 'card' | 'instapay' | 'bank_transfer' | 'other';
 
 export interface LineItem {

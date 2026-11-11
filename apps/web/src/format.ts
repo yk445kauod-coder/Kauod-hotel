@@ -40,7 +40,7 @@ export function d(iso: string | null): string {
 }
 
 export const STATUS_LABEL: Record<string, string> = {
-  draft: 'مسودة', open: 'مفتوحة', locked: 'مقفلة', cancelled: 'ملغاة',
+  draft: 'مسودة', open: 'مفتوحة', locked: 'مقفلة', printed: 'مطبوعة', cancelled: 'ملغاة',
 };
 
 export const ETA_LABEL: Record<string, string> = {
