@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import { api, ApiError } from '../api';
 import { exportExcelMatrix } from '../exports';
+import { Icon } from '../components/Icon';
 import type { InvoiceFull, InvoiceLine, Settings, CalcResult, Payment } from '../types';
 import { egpEn, d, PAY_LABEL, STATUS_LABEL } from '../format';
 
@@ -71,7 +72,7 @@ export function PrintView({ invoiceId, onClose }: { invoiceId: string; onClose: 
   if (err) return (
     <div className="content">
       <div className="alert err">{err}</div>
-      <button className="btn" onClick={onClose}>رجوع</button>
+      <button className="btn" onClick={onClose}><Icon name="back" size={16} /> رجوع</button>
     </div>
   );
   if (!data) return <div className="content muted">جارٍ التحميل…</div>;
@@ -95,13 +96,13 @@ export function PrintView({ invoiceId, onClose }: { invoiceId: string; onClose: 
     <div>
       <div className="no-print content print-toolbar" style={{ maxWidth: 900 }}>
         <div className="row" style={{ justifyContent: 'space-between' }}>
-          <button className="btn" onClick={onClose}>← رجوع</button>
+          <button className="btn" onClick={onClose}><Icon name="back" size={16} /> رجوع</button>
           <div className="row">
             {data.etaIssues.length > 0
               ? <span className="alert warn" style={{ margin: 0 }}>تنبيهات الضرائب: {data.etaIssues.length}</span>
               : <span className="alert ok" style={{ margin: 0 }}>بيانات الفاتورة متوافقة مع مصلحة الضرائب</span>}
-            <button className="btn" onClick={exportInvoiceExcel}>⬇ Excel</button>
-            <button className="btn primary" onClick={() => window.print()}>🖨 طباعة / PDF</button>
+            <button className="btn" onClick={exportInvoiceExcel}><Icon name="download" size={16} /> Excel</button>
+            <button className="btn primary" onClick={() => window.print()}><Icon name="printer" size={16} /> طباعة / PDF</button>
           </div>
         </div>
         {data.etaIssues.length > 0 && (

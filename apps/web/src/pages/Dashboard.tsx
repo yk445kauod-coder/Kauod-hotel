@@ -1,4 +1,5 @@
 import { useEffect, useState, lazy, Suspense } from 'react';
+import { Icon } from '../components/Icon';
 import { api } from '../api';
 import type { SessionUser, InvoiceSummary } from '../types';
 import { egp, d, STATUS_LABEL, PAY_LABEL, today } from '../format';
@@ -68,13 +69,13 @@ export function Dashboard({ user, onOpenInvoice, onNewInvoice }: {
     <>
       <div className="dash-hero">
         <div>
-          <div className="hero-hello">أهلاً {user.name} 👋</div>
+          <div className="hero-hello">أهلاً {user.name}</div>
           <div className="hero-sub">
             {sum.count === 0 ? 'ابدأ بإصدار أول فاتورة اليوم.' : `لديك ${sum.count} فاتورة، منها ${sum.valid} سليمة و${sum.cancelled} ملغاة.`}
           </div>
         </div>
         {onNewInvoice && ['admin', 'manager', 'reception'].includes(user.role) && (
-          <button className="btn primary" onClick={onNewInvoice}>+ فاتورة جديدة</button>
+          <button className="btn primary" onClick={onNewInvoice}><Icon name="plus" size={16} /> فاتورة جديدة</button>
         )}
       </div>
 
@@ -109,7 +110,7 @@ export function Dashboard({ user, onOpenInvoice, onNewInvoice }: {
 
       {isAdmin && (
         <div className="alert warn" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-          <span>💾 خُد نسخة احتياطية من بيانات الفندق النهاردة عشان تحفظها على فلاشة أو جوجل درايف.</span>
+          <span><Icon name="save" size={15} style={{ verticalAlign: '-2px' }} /> خُد نسخة احتياطية من بيانات الفندق النهاردة عشان تحفظها على فلاشة أو جوجل درايف.</span>
           <button className="btn" onClick={backup}>تحميل نسخة احتياطية</button>
         </div>
       )}

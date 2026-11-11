@@ -740,3 +740,46 @@ td.num, th.num { text-align: end; font-variant-numeric: tabular-nums; direction:
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
 }
+
+/* ============================================================ icons (lucide)
+   Real SVG icons replace the old emoji/glyph set. Each icon slot is a flex
+   box so the glyph sits on the text baseline instead of shifting it. */
+.navbtn .ico { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; }
+.bn-ico { display: inline-flex; align-items: center; justify-content: center; height: 20px; }
+.qc-item-ico { display: inline-flex; align-items: center; justify-content: center; height: 20px; }
+.hint-ico { display: inline-flex; align-items: center; justify-content: center; }
+.guide-sec h3 .ico { display: inline-flex; align-items: center; }
+.btn > svg, .hint-nav > svg, .hint-x > svg, .qc-x > svg { vertical-align: middle; }
+.login-foot .lock svg { vertical-align: -2px; }
+.qc-pill { display: inline-flex; align-items: center; gap: 8px; }
+.qc-x { display: inline-flex; align-items: center; justify-content: center; }
+.hint-nav, .hint-x { display: inline-flex; align-items: center; justify-content: center; }
+.bn-fab-ico svg { width: 26px; height: 26px; }
+
+/* ============================================================ sweetalert2 */
+.kaoud-swal {
+  font-family: var(--font) !important;
+  background: var(--surface) !important;
+  color: var(--text) !important;
+  border-radius: var(--radius-xl) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: var(--shadow-64) !important;
+}
+.kaoud-swal .swal2-title { color: var(--text) !important; font-size: 19px !important; }
+.kaoud-swal .swal2-html-container { color: var(--text-2) !important; }
+.kaoud-swal .swal2-input {
+  background: var(--surface-2) !important; color: var(--text) !important;
+  border: 1px solid var(--border) !important; border-radius: var(--radius-m) !important;
+  font-family: var(--mono) !important; box-shadow: none !important;
+}
+.kaoud-swal .swal2-input:focus { border-color: var(--brand) !important; box-shadow: 0 0 0 3px var(--brand-tint) !important; }
+.kaoud-swal-confirm, .kaoud-swal-cancel {
+  border-radius: var(--radius-m) !important; font-weight: 600 !important;
+  font-family: var(--font) !important; box-shadow: none !important;
+}
+.kaoud-swal-cancel { color: var(--text) !important; border: 1px solid var(--border-strong) !important; }
+.kaoud-swal-toast {
+  font-family: var(--font) !important; background: var(--surface) !important;
+  color: var(--text) !important; border: 1px solid var(--border) !important;
+  box-shadow: var(--shadow-16) !important;
+}

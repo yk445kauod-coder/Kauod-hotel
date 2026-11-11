@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, ApiError } from '../api';
 import { downloadJson, readJsonFile } from '../exports';
+import { confirmDialog } from '../alert';
 import type { SessionUser, Settings } from '../types';
 
 export function SettingsPage({ user, onSaved }: { user: SessionUser; onSaved: () => void }) {
@@ -55,7 +56,13 @@ export function SettingsPage({ user, onSaved }: { user: SessionUser; onSaved: ()
   async function restore(file: File | undefined) {
     if (!file) return;
     setErr(''); setMsg('');
-    if (!window.confirm('سيتم استبدال كل البيانات الحالية (الفواتير، الغرف، النزلاء، الحجوزات، الإعدادات) بمحتوى النسخة الاحتياطية. المستخدمون وكلمات المرور لن تتأثر. هل تريد المتابعة؟')) return;
+    const ok = await confirmDialog({
+      title: 'استبدال البيانات من النسخة الاحتياطية؟',
+      text: 'سيتم استبدال كل البيانات الحالية (الفواتير، الغرف، النزلاء، الحجوزات، الإعدادات) بمحتوى الملف. المستخدمون وكلمات المرور لن تتأثر.',
+      confirmText: 'استبدال',
+      danger: true,
+    });
+    if (!ok) return;
     setBusy(true);
     try {
       const data = await readJsonFile(file);
@@ -73,7 +80,13 @@ export function SettingsPage({ user, onSaved }: { user: SessionUser; onSaved: ()
 
   async function clearData() {
     if (clearWord !== 'مسح') return;
-    if (!window.confirm('سيتم حذف كل الفواتير والغرف والنزلاء والحجوزات نهائيًا. المستخدمون والإعدادات لن تتأثر. هل أنت متأكد؟')) return;
+    const ok = await confirmDialog({
+      title: 'حذف كل البيانات التشغيلية؟',
+      text: 'سيتم حذف كل الفواتير والغرف والنزلاء والحجوزات نهائيًا. المستخدمون والإعدادات لن تتأثر.',
+      confirmText: 'حذف نهائي',
+      danger: true,
+    });
+    if (!ok) return;
     setErr(''); setMsg(''); setBusy(true);
     try {
       await api.post('/api/admin/clear-data', { confirm: 'مسح' });

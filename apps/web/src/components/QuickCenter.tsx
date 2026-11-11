@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { SessionUser } from '../types';
+import { Icon, type IconName } from './Icon';
 
-export interface QuickShortcut { id: string; label: string; ico: string; }
+export interface QuickShortcut { id: string; label: string; ico: IconName; }
 
 interface Props {
   user: SessionUser;
@@ -20,7 +21,7 @@ interface Props {
   onLogout: () => void;
 }
 
-interface Macro { key: string; label: string; ico: string; run: () => void; adminOnly?: boolean; }
+interface Macro { key: string; label: string; ico: IconName; run: () => void; adminOnly?: boolean; }
 
 export function QuickCenter({
   user, shortcuts, activeTab, online, pending, syncing,
@@ -45,15 +46,15 @@ export function QuickCenter({
     return () => { document.removeEventListener('keydown', onKey); document.removeEventListener('mousedown', onClick); };
   }, [open]);
 
-  const macros: Macro[] = [
-    { key: 'new', label: 'فاتورة جديدة', ico: '➕', run: onNewInvoice },
-    { key: 'sync', label: syncing ? 'جارٍ المزامنة…' : `مزامنة الآن${pending ? ` (${pending})` : ''}`, ico: '🔄', run: onSync },
-    { key: 'backup', label: 'نسخة احتياطية', ico: '💾', run: onBackup, adminOnly: true },
-    { key: 'today', label: 'تقرير اليوم', ico: '🧾', run: onTodayReport },
-    { key: 'guide', label: 'الدليل', ico: '❓', run: onOpenGuide },
-    { key: 'theme', label: 'تبديل الوضع', ico: '🌗', run: onToggleTheme },
-    { key: 'logout', label: 'خروج', ico: '⎋', run: onLogout },
-  ].filter((m) => !m.adminOnly || user.isOwner || user.role === 'admin');
+  const macros = ([
+    { key: 'new', label: 'فاتورة جديدة', ico: 'plus', run: onNewInvoice },
+    { key: 'sync', label: syncing ? 'جارٍ المزامنة…' : `مزامنة الآن${pending ? ` (${pending})` : ''}`, ico: 'sync', run: onSync },
+    { key: 'backup', label: 'نسخة احتياطية', ico: 'save', run: onBackup, adminOnly: true },
+    { key: 'today', label: 'تقرير اليوم', ico: 'invoice', run: onTodayReport },
+    { key: 'guide', label: 'الدليل', ico: 'help', run: onOpenGuide },
+    { key: 'theme', label: 'تبديل الوضع', ico: 'moon', run: onToggleTheme },
+    { key: 'logout', label: 'خروج', ico: 'logout', run: onLogout },
+  ] satisfies Macro[]).filter((m) => !m.adminOnly || user.isOwner || user.role === 'admin');
 
   const time = clock.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
   const statusTxt = online ? (pending ? `${pending} بانتظار الرفع` : 'متصل') : 'غير متصل';
@@ -70,14 +71,14 @@ export function QuickCenter({
         <span className={`qc-dot ${online ? (pending ? 'warn' : 'ok') : 'off'}`} aria-hidden="true" />
         <span className="qc-status">{statusTxt}</span>
         <span className="qc-time">{time}</span>
-        <span className={`qc-chev ${open ? 'up' : ''}`} aria-hidden="true">▾</span>
+        <span className={`qc-chev ${open ? 'up' : ''}`} aria-hidden="true"><Icon name="chevronDown" size={15} /></span>
       </button>
 
       {open && (
         <div className="qc-panel" role="menu">
           <div className="qc-head">
             <span>المركز السريع</span>
-            <button className="qc-x" onClick={() => setOpen(false)} aria-label="إغلاق">✕</button>
+            <button className="qc-x" onClick={() => setOpen(false)} aria-label="إغلاق"><Icon name="close" size={18} /></button>
           </div>
 
           <div className="qc-sec">اختصارات</div>
@@ -89,7 +90,7 @@ export function QuickCenter({
                 onClick={() => { onNavigate(s.id); setOpen(false); }}
                 role="menuitem"
               >
-                <span className="qc-item-ico">{s.ico}</span>
+                <span className="qc-item-ico"><Icon name={s.ico} size={20} /></span>
                 <span className="qc-item-lbl">{s.label}</span>
               </button>
             ))}
@@ -99,7 +100,7 @@ export function QuickCenter({
           <div className="qc-grid">
             {macros.map((m) => (
               <button key={m.key} className="qc-item macro" onClick={() => { m.run(); setOpen(false); }} role="menuitem">
-                <span className="qc-item-ico">{m.ico}</span>
+                <span className="qc-item-ico"><Icon name={m.ico} size={20} /></span>
                 <span className="qc-item-lbl">{m.label}</span>
               </button>
             ))}

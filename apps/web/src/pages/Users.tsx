@@ -2,6 +2,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { api, ApiError } from '../api';
 import type { SessionUser } from '../types';
 import { dt, ROLE_LABEL } from '../format';
+import { Icon } from '../components/Icon';
+import { confirmDialog, promptDialog } from '../alert';
 
 interface UserRow { id: string; username: string; name: string; role: string; active: number; is_owner: number; created_at: string; last_login_at: string | null; }
 
@@ -52,14 +54,27 @@ export function UsersPage({ user }: { user: SessionUser }) {
   }
 
   async function resetPassword(u: UserRow) {
-    const pw = prompt(`كلمة مرور جديدة للمستخدم ${u.username} (10 أحرف على الأقل، حرف كبير وصغير ورقم):`);
-    if (!pw) return; setErr(''); setMsg('');
+    const pw = await promptDialog({
+      title: `كلمة مرور جديدة لـ ${u.name}`,
+      text: '10 أحرف على الأقل، حرف كبير وصغير ورقم.',
+      inputType: 'password',
+      placeholder: u.username,
+      confirmText: 'تغيير',
+      minLength: 10,
+    });
+    if (pw === null) return; setErr(''); setMsg('');
     try { await api.patch(`/api/users/${u.id}`, { password: pw }); setMsg('تم تغيير كلمة المرور'); }
     catch (e) { fail(e, 'تعذّر التغيير'); }
   }
 
   async function removeUser(u: UserRow) {
-    if (!confirm(`حذف المستخدم "${u.name}" (${u.username}) نهائيًا؟ لا يمكن التراجع.`)) return;
+    const ok = await confirmDialog({
+      title: `حذف المستخدم «${u.name}»؟`,
+      text: `(${u.username}) — لا يمكن التراجع عن هذا الإجراء.`,
+      confirmText: 'حذف نهائي',
+      danger: true,
+    });
+    if (!ok) return;
     setErr(''); setMsg('');
     try { await api.del(`/api/users/${u.id}`); setMsg('تم حذف المستخدم'); await load(); }
     catch (e) { fail(e, 'تعذّر الحذف'); }
@@ -101,7 +116,7 @@ export function UsersPage({ user }: { user: SessionUser }) {
           <tbody>
             {rows.map((u) => (
               <tr key={u.id}>
-                <td className="mono" data-label="اسم المستخدم">{u.username}{u.is_owner ? ' ★' : ''}</td>
+                <td className="mono" data-label="اسم المستخدم">{u.username}{u.is_owner ? <> <Icon name="star" size={13} /></> : ''}</td>
                 <td data-label="الاسم">{u.name}</td>
                 <td data-label="الصلاحية">
                   {isAdmin && !u.is_owner

@@ -1,8 +1,11 @@
 // Service worker: keeps the whole app shell (pages, scripts, fonts, logo) usable
 // offline. API calls are never cached — offline writes go through the IndexedDB
 // queue in the app instead, so stale data is never served.
-const CACHE = 'kaoud-shell-v1';
-const SHELL = ['/', '/index.html', '/manifest.webmanifest'];
+const CACHE = 'kaoud-shell-v2';
+const SHELL = [
+  '/', '/index.html', '/manifest.webmanifest',
+  '/icon-192.png', '/icon-512.png', '/favicon.png', '/apple-touch-icon.png',
+];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

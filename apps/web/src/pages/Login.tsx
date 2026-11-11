@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, ApiError } from '../api';
 import type { SessionUser } from '../types';
+import { Icon } from '../components/Icon';
 
 interface Branding { hotelName: string; hotelNameEn: string; city: string; logo: string; }
 
@@ -53,7 +54,6 @@ export function Login({ onLogin }: { onLogin: (u: SessionUser) => void }) {
 
   const hotelName = branding?.hotelName || 'فندق قاعود سبورتنج';
   const hotelNameEn = branding?.hotelNameEn || '';
-  const initial = hotelName.trim().charAt(0) || 'ق';
 
   return (
     <div className="login-wrap">
@@ -62,7 +62,7 @@ export function Login({ onLogin }: { onLogin: (u: SessionUser) => void }) {
           <div className="logo-badge">
             {branding?.logo
               ? <img src={branding.logo} alt={hotelName} />
-              : <span className="mono-name">{initial}</span>}
+              : <Icon name="hotel" size={34} />}
           </div>
           <h2>{hotelName}</h2>
           <div className="muted">{hotelNameEn || 'نظام الفواتير الإلكترونية والضرائب'}</div>
@@ -99,7 +99,7 @@ export function Login({ onLogin }: { onLogin: (u: SessionUser) => void }) {
         </form>
 
         <div className="login-foot">
-          <span className="lock">🔒 محمي — جميع عمليات الدخول والتعديل مسجّلة.</span>
+          <span className="lock"><Icon name="lock" size={14} /> محمي — جميع عمليات الدخول والتعديل مسجّلة.</span>
         </div>
       </div>
     </div>

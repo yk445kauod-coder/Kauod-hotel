@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { SessionUser } from '../types';
+import { Icon, type IconName } from './Icon';
 
 interface GuideItem {
   title: string;
@@ -10,7 +11,7 @@ interface GuideItem {
 interface GuideSection {
   id: string;
   title: string;
-  ico: string;
+  ico: IconName;
   items: GuideItem[];
   roles?: SessionUser['role'][];
 }
@@ -19,7 +20,7 @@ const SECTIONS: GuideSection[] = [
   {
     id: 'start',
     title: 'البداية السريعة',
-    ico: '🚀',
+    ico: 'rocket',
     items: [
       { title: 'تسجيل الدخول', body: 'ادخل باسم المستخدم وكلمة المرور. أول مرة فقط تظهر شاشة التهيئة لإنشاء حساب المالك واسم الفندق.' },
       { title: 'لوحة التحكم', body: 'تعرض ملخص اليوم: عدد الفواتير، الإيراد، الضريبة، وأحدث الفواتير. منها تفتح أي فاتورة للطباعة.' },
@@ -29,7 +30,7 @@ const SECTIONS: GuideSection[] = [
   {
     id: 'invoices',
     title: 'الفواتير',
-    ico: '🧾',
+    ico: 'invoice',
     items: [
       { title: 'إنشاء فاتورة', body: 'اضغط «فاتورة جديدة»، اختر النزيل والغرفة، وضبط ليالي الإقامة. يظهر الإجمالي والضريبة والخصم لحظيًا.' },
       { title: 'الطباعة', body: 'من قائمة الفواتير اضغط «طباعة». تُفتح نسخة جاهزة للطابعة الحرارية أو A4.' },
@@ -40,10 +41,10 @@ const SECTIONS: GuideSection[] = [
   {
     id: 'offline',
     title: 'العمل بدون إنترنت والمزامنة',
-    ico: '📶',
+    ico: 'wifi',
     items: [
-      { title: 'الوضع الأوفلاين', body: 'شغّله من أيقونة 📶 بالأعلى (يحتاج اتصالًا مرة واحدة لحجز أرقام فواتير). بعدها تقدر تنشئ فواتير بدون إنترنت.' },
-      { title: 'مؤشر المزامنة', body: 'شريط بالأعلى يوضح الحالة: 🟢 متزامن، 🟡 بيانات بانتظار الرفع، 🔴 غير متصل. اضغطه للمزامنة اليدوية.' },
+      { title: 'الوضع الأوفلاين', body: 'شغّله من أيقونة الواي فاي بالأعلى (يحتاج اتصالًا مرة واحدة لحجز أرقام فواتير). بعدها تقدر تنشئ فواتير بدون إنترنت.' },
+      { title: 'مؤشر المزامنة', body: 'شريط بالأعلى يوضح الحالة: أخضر متزامن، أصفر بيانات بانتظار الرفع، أحمر غير متصل. اضغطه للمزامنة اليدوية.' },
       { title: 'حماية الخروج', body: 'لو فيه بيانات لسه مرفوعتش، النظام يرفض تسجيل الخروج أو يرفعها أولًا — عشان ما تضيعش أي فاتورة.' },
       { title: 'القراءة أوفلاين', body: 'آخر قوائم الفواتير والنزلاء محفوظة على الجهاز، فتقدر تشوفها حتى بدون اتصال.' },
     ],
@@ -51,7 +52,7 @@ const SECTIONS: GuideSection[] = [
   {
     id: 'directory',
     title: 'الغرف والنزلاء',
-    ico: '🏨',
+    ico: 'hotel',
     items: [
       { title: 'إضافة غرفة', body: 'حدد الرقم والنوع والسعر الليلي والسعة. الأرقام التي أضفتها هي اللي تظهر — مفيش أرقام افتراضية.' },
       { title: 'سجل النزلاء', body: 'احفظ بيانات النزيل لاستخدامها تاني في فاتورة جديدة بسرعة.' },
@@ -61,7 +62,7 @@ const SECTIONS: GuideSection[] = [
   {
     id: 'reports',
     title: 'التقارير',
-    ico: '📊',
+    ico: 'reports',
     items: [
       { title: 'كشف المدة', body: 'للمديرين: اختر من/إلى تاريخ واطبع كشف فواتير كامل مع الإجماليات.' },
       { title: 'تصدير Excel', body: 'صدّر سجل الفواتير كملف Excel من أي شاشة فواتير.' },
@@ -71,7 +72,7 @@ const SECTIONS: GuideSection[] = [
   {
     id: 'settings',
     title: 'الإعدادات',
-    ico: '⚙️',
+    ico: 'settings',
     roles: ['admin', 'manager'],
     items: [
       { title: 'الضرائب والخصم', body: 'حدّد نسبة الضريبة (VAT) والخصم، وهل الأسعار شاملة الضريبة أم لا.' },
@@ -82,7 +83,7 @@ const SECTIONS: GuideSection[] = [
   {
     id: 'users',
     title: 'المستخدمون والصلاحيات',
-    ico: '👥',
+    ico: 'users',
     roles: ['admin', 'manager'],
     items: [
       { title: 'الأدوار', body: 'المالك/المدير (كل شيء)، الاستقبال (إنشاء فواتير)، وأدوار أخرى للقراءة فقط.' },
@@ -93,7 +94,7 @@ const SECTIONS: GuideSection[] = [
   {
     id: 'keys',
     title: 'اختصارات لوحة المفاتيح',
-    ico: '⌨️',
+    ico: 'keyboard',
     items: [
       { title: '؟ (Shift + /)', body: 'افتح هذا الدليل في أي وقت.' },
       { title: 'Esc', body: 'أغلق الدليل أو أي نافذة مفتوحة.' },
@@ -143,7 +144,7 @@ export function Guide({ open, onClose, user }: Props) {
             <h2>الدليل السريع</h2>
             <p className="muted">كل اللي تحتاجه لاستخدام النظام — ابحث في أي وقت.</p>
           </div>
-          <button className="qc-x" onClick={onClose} aria-label="إغلاق">✕</button>
+          <button className="qc-x" onClick={onClose} aria-label="إغلاق"><Icon name="close" size={18} /></button>
         </div>
         <input
           className="guide-search"
@@ -157,7 +158,7 @@ export function Guide({ open, onClose, user }: Props) {
           {sections.length === 0 && <div className="muted" style={{ padding: 16 }}>مفيش نتائج — جرّب كلمة تانية.</div>}
           {sections.map((s) => (
             <section key={s.id} className="guide-sec">
-              <h3><span className="ico">{s.ico}</span>{s.title}</h3>
+              <h3><span className="ico"><Icon name={s.ico} size={16} /></span>{s.title}</h3>
               <div className="guide-items">
                 {s.items.map((it) => (
                   <article key={it.title} className="guide-item">

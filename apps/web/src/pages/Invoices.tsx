@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { api, ApiError } from '../api';
 import { exportExcel, openPrintWindow } from '../exports';
 import { queueInvoice, listQueue, removeQueued, syncNow, type QueuedInvoice } from '../offline';
+import { Icon } from '../components/Icon';
 import { cacheGet, cacheSet } from '../cache';
 import type { SessionUser, Settings, InvoiceSummary, InvoiceFull, InvoiceLine } from '../types';
 import { egp, egpEn, d, dt, STATUS_LABEL, ETA_LABEL, PAY_LABEL, today, addDays, nightsBetween } from '../format';
@@ -163,7 +164,7 @@ export function Invoices({ user, settings, onPrint, openNewSignal = 0, offline =
         <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
           <input placeholder="بحث سريع (رقم / نزيل / غرفة)" value={q} onChange={(e) => { setQ(e.target.value); setOffset(0); }} style={{ padding: '9px 11px', border: '1px solid var(--border)', borderRadius: 8, minWidth: 240 }} />
           <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-            {canWrite && <button className="btn primary" onClick={() => setEditing({ draft: blankDraft(settings) })}>+ فاتورة جديدة</button>}
+            {canWrite && <button className="btn primary" onClick={() => setEditing({ draft: blankDraft(settings) })}><Icon name="plus" size={16} /> فاتورة جديدة</button>}
             <button className="btn" onClick={exportRegisterExcel} disabled={!list.length}>تصدير Excel</button>
           </div>
         </div>
@@ -424,7 +425,7 @@ function InvoiceEditor({ user, settings, id, initial, onClose, onSaved, onPrint,
       onSaved();
     } catch (e) {
       const ae = e as ApiError;
-      if (e instanceof TypeError && !id) setErr('تعذّر الاتصال — شغّل الوضع الأوفلاين 📶 لتحفظ الفاتورة محليًا');
+      if (e instanceof TypeError && !id) setErr('تعذّر الاتصال — شغّل الوضع الأوفلاين لتحفظ الفاتورة محليًا');
       else setErr(ae.code === 'bad_request' ? 'تحقق من صحة البيانات (الوصف والمبلغ مطلوبان)' : `تعذّر الحفظ (${ae.code})`);
     } finally { setBusy(false); }
   }
@@ -467,7 +468,7 @@ function InvoiceEditor({ user, settings, id, initial, onClose, onSaved, onPrint,
 
       <div style={{ marginTop: 14 }}>
         <button className="btn ghost" onClick={() => setShowTax((v) => !v)}>
-          {showTax ? '▾' : '▸'} بيانات الضريبة والإصدار {hasOverrides ? '(مخصّصة لهذه الفاتورة)' : '(من الإعدادات)'}
+          <Icon name={showTax ? 'chevronDown' : 'chevronRight'} size={15} /> بيانات الضريبة والإصدار {hasOverrides ? '(مخصّصة لهذه الفاتورة)' : '(من الإعدادات)'}
         </button>
         {showTax && (
           <div className="card" style={{ marginTop: 8, background: 'var(--surface-2)' }}>
@@ -500,12 +501,12 @@ function InvoiceEditor({ user, settings, id, initial, onClose, onSaved, onPrint,
               <td className="num"><input type="number" min="0" step="1" value={l.qty} onChange={(e) => setLine(i, { qty: Number(e.target.value) })} style={{ width: 80, padding: 7, border: '1px solid var(--border)', borderRadius: 6 }} dir="ltr" /></td>
               <td className="num"><input type="number" min="0" step="0.01" value={l.unitPrice} onChange={(e) => setLine(i, { unitPrice: e.target.value })} style={{ width: 110, padding: 7, border: '1px solid var(--border)', borderRadius: 6 }} dir="ltr" /></td>
               <td className="num">{egp((Number(l.qty) || 0) * (Number(l.unitPrice) || 0))}</td>
-              <td>{draft.lines.length > 1 && <button className="btn ghost" onClick={() => setDraft({ ...draft, lines: draft.lines.filter((_, j) => j !== i) })}>✕</button>}</td>
+              <td>{draft.lines.length > 1 && <button className="btn ghost" onClick={() => setDraft({ ...draft, lines: draft.lines.filter((_, j) => j !== i) })} aria-label="حذف البند"><Icon name="close" size={15} /></button>}</td>
             </tr>
           ))}
         </tbody>
       </table>
-      <button className="btn" style={{ marginTop: 10 }} onClick={() => setDraft({ ...draft, lines: [...draft.lines, { description: '', qty: 1, unitPrice: '', kind: 'extra' }] })}>+ إضافة بند</button>
+      <button className="btn" style={{ marginTop: 10 }} onClick={() => setDraft({ ...draft, lines: [...draft.lines, { description: '', qty: 1, unitPrice: '', kind: 'extra' }] })}><Icon name="plus" size={15} /> إضافة بند</button>
 
       <div className="row" style={{ justifyContent: 'space-between', marginTop: 16, alignItems: 'flex-start' }}>
         <div>

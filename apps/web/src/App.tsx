@@ -20,20 +20,21 @@ import { pendingOps } from './outbox';
 import { QuickCenter } from './components/QuickCenter';
 import { Guide } from './components/Guide';
 import { TopHints } from './components/TopHints';
+import { Icon, type IconName } from './components/Icon';
 import { downloadJson } from './exports';
 
 type Tab = 'dashboard' | 'invoices' | 'reports' | 'directory' | 'serial' | 'users' | 'monitor' | 'settings' | 'audit';
 
-const NAV: { id: Tab; label: string; ico: string; roles?: SessionUser['role'][] }[] = [
-  { id: 'dashboard', label: 'لوحة التحكم', ico: '▤' },
-  { id: 'invoices', label: 'الفواتير', ico: '🧾' },
-  { id: 'reports', label: 'التقارير', ico: '📊' },
-  { id: 'directory', label: 'الغرف والنزلاء', ico: '🏨' },
-  { id: 'serial', label: 'أرقام الفواتير', ico: '#️⃣', roles: ['admin', 'manager'] },
-  { id: 'users', label: 'المستخدمون', ico: '👥', roles: ['admin', 'manager'] },
-  { id: 'monitor', label: 'مراقبة المستخدمين', ico: '🕵️', roles: ['admin', 'manager'] },
-  { id: 'settings', label: 'الإعدادات', ico: '⚙️', roles: ['admin', 'manager'] },
-  { id: 'audit', label: 'سجل النشاط', ico: '📜', roles: ['admin'] },
+const NAV: { id: Tab; label: string; ico: IconName; roles?: SessionUser['role'][] }[] = [
+  { id: 'dashboard', label: 'لوحة التحكم', ico: 'dashboard' },
+  { id: 'invoices', label: 'الفواتير', ico: 'invoice' },
+  { id: 'reports', label: 'التقارير', ico: 'reports' },
+  { id: 'directory', label: 'الغرف والنزلاء', ico: 'hotel' },
+  { id: 'serial', label: 'أرقام الفواتير', ico: 'hash', roles: ['admin', 'manager'] },
+  { id: 'users', label: 'المستخدمون', ico: 'users', roles: ['admin', 'manager'] },
+  { id: 'monitor', label: 'مراقبة المستخدمين', ico: 'monitor', roles: ['admin', 'manager'] },
+  { id: 'settings', label: 'الإعدادات', ico: 'settings', roles: ['admin', 'manager'] },
+  { id: 'audit', label: 'سجل النشاط', ico: 'audit', roles: ['admin'] },
 ];
 
 export function App() {
@@ -177,13 +178,13 @@ export function App() {
   const hotelName = settings?.hotel_name ?? 'فندق قاعود سبورتنج';
   const canWrite = ['admin', 'manager', 'reception'].includes(user.role);
   // Bottom bar: two tabs each side of a centred "+" so the FAB never crowds a tab.
-  const bnRightDefs: { id: Tab; label: string; ico: string }[] = [
-    { id: 'dashboard', label: 'الرئيسية', ico: '▤' },
-    { id: 'invoices', label: 'الفواتير', ico: '🧾' },
+  const bnRightDefs: { id: Tab; label: string; ico: IconName }[] = [
+    { id: 'dashboard', label: 'الرئيسية', ico: 'dashboard' },
+    { id: 'invoices', label: 'الفواتير', ico: 'invoice' },
   ];
   const bnRight = bnRightDefs.filter((b) => nav.some((n) => n.id === b.id));
   const bnLeftTab = nav.find((n) => n.id === 'reports') ?? nav.find((n) => n.id === 'directory');
-  const bnLeft: { id: Tab; label: string; ico: string }[] = bnLeftTab
+  const bnLeft: { id: Tab; label: string; ico: IconName }[] = bnLeftTab
     ? [{ id: bnLeftTab.id, label: bnLeftTab.label, ico: bnLeftTab.ico }]
     : [];
 
@@ -194,13 +195,13 @@ export function App() {
         <h1>
           {settings?.logo_data
             ? <img className="logo" src={settings.logo_data} alt={hotelName} />
-            : <span className="logo-ph">{hotelName.trim().charAt(0) || 'ق'}</span>}
+            : <span className="logo-ph"><Icon name="hotel" size={20} /></span>}
           <span>{hotelName}</span>
         </h1>
         <div className="hotel">نظام الفواتير والضرائب</div>
         {nav.map((n) => (
           <button key={n.id} className={`navbtn ${tab === n.id ? 'active' : ''}`} onClick={() => { setTab(n.id); setNavOpen(false); }}>
-            <span className="ico">{n.ico}</span><span>{n.label}</span>
+            <span className="ico"><Icon name={n.ico} /></span><span>{n.label}</span>
           </button>
         ))}
         <div className="spacer" />
@@ -208,7 +209,7 @@ export function App() {
           <b>{user.name}</b>
           <span>{ROLE_LABEL[user.role] ?? user.role}</span>
         </div>
-        <button className="navbtn" onClick={onLogout}><span className="ico">⎋</span><span>خروج</span></button>
+        <button className="navbtn" onClick={onLogout}><span className="ico"><Icon name="logout" /></span><span>خروج</span></button>
       </aside>
 
       <main className="main">
@@ -221,7 +222,7 @@ export function App() {
               aria-expanded={navOpen}
               style={{ padding: '7px 10px', fontSize: 18 }}
             >
-              ☰
+              <Icon name="menu" size={20} />
             </button>
             <h2 style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
               {nav.find((n) => n.id === tab)?.label}
@@ -234,7 +235,7 @@ export function App() {
               disabled={!online || syncing}
               title={online ? (pending ? `${pending} عملية في انتظار المزامنة` : 'متصل — كل شيء متزامن') : 'غير متصل — التغييرات محفوظة محليًا'}
             >
-              {online ? '🟢' : '🔴'} {syncing ? 'جارٍ المزامنة…' : pending ? `${pending} بانتظار المزامنة` : 'متزامن'}
+              {online ? <Icon name="wifi" size={14} /> : <Icon name="wifiOff" size={14} />} {syncing ? 'جارٍ المزامنة…' : pending ? `${pending} بانتظار المزامنة` : 'متزامن'}
             </button>
             <button
               className={`btn ghost ${offlineMode ? 'is-active' : ''}`}
@@ -242,7 +243,7 @@ export function App() {
               title={offlineMode ? 'إيقاف الوضع الأوفلاين' : 'تشغيل الوضع الأوفلاين (إنشاء فواتير بدون إنترنت)'}
               style={{ padding: '7px 10px', fontSize: 16 }}
             >
-              {offlineMode ? '📴' : '📶'}
+              {offlineMode ? <Icon name="wifiOff" size={18} /> : <Icon name="wifi" size={18} />}
             </button>
             <span className="muted">{settings?.hotel_name ?? ''}</span>
             <button
@@ -252,7 +253,7 @@ export function App() {
               aria-label="فتح الدليل السريع"
               style={{ padding: '7px 10px', fontSize: 16 }}
             >
-              ❓
+              <Icon name="help" size={18} />
             </button>
             <button
               className="btn ghost"
@@ -261,7 +262,7 @@ export function App() {
               aria-label={theme === 'dark' ? 'الوضع الفاتح' : 'الوضع الداكن'}
               style={{ padding: '7px 10px', fontSize: 16 }}
             >
-              {theme === 'dark' ? '☀️' : '🌙'}
+              {theme === 'dark' ? <Icon name="sun" size={18} /> : <Icon name="moon" size={18} />}
             </button>
           </div>
         </header>
@@ -315,7 +316,7 @@ export function App() {
         <div className="bn-side">
           {bnRight.map((b) => (
             <button key={b.id} className={`bn-item ${tab === b.id ? 'active' : ''}`} onClick={() => { setTab(b.id); setNavOpen(false); }}>
-              <span className="bn-ico">{b.ico}</span>
+              <span className="bn-ico"><Icon name={b.ico} size={20} /></span>
               <span className="bn-lbl">{b.label}</span>
             </button>
           ))}
@@ -323,19 +324,19 @@ export function App() {
         {canWrite ? (
           <div className="bn-mid">
             <button className="bn-fab" onClick={() => { setTab('invoices'); setNewInvoiceSignal((n) => n + 1); setNavOpen(false); }} aria-label="فاتورة جديدة">
-              <span className="bn-fab-ico">+</span>
+              <span className="bn-fab-ico"><Icon name="plus" size={26} /></span>
             </button>
           </div>
         ) : <div className="bn-mid" aria-hidden="true" />}
         <div className="bn-side">
           {bnLeft.map((b) => (
             <button key={b.id} className={`bn-item ${tab === b.id ? 'active' : ''}`} onClick={() => { setTab(b.id); setNavOpen(false); }}>
-              <span className="bn-ico">{b.ico}</span>
+              <span className="bn-ico"><Icon name={b.ico} size={20} /></span>
               <span className="bn-lbl">{b.label}</span>
             </button>
           ))}
           <button className={`bn-item ${navOpen ? 'active' : ''}`} onClick={() => setNavOpen((v) => !v)} aria-label="المزيد" aria-expanded={navOpen}>
-            <span className="bn-ico">☰</span>
+            <span className="bn-ico"><Icon name="menu" size={20} /></span>
             <span className="bn-lbl">المزيد</span>
           </button>
         </div>
